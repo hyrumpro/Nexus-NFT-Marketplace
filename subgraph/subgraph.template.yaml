@@ -1,0 +1,125 @@
+specVersion: 1.0.0
+description: NexusNFT Marketplace Subgraph - Indexes NFT listings, auctions, offers, and sales
+repository: https://github.com/nexusnft/nft-marketplace
+schema:
+  file: ./schema.graphql
+
+dataSources:
+  # Nexus Marketplace - Main marketplace contract
+  - kind: ethereum
+    name: NexusMarketplace
+    network: {{NETWORK}}
+    source:
+      address: "{{MARKETPLACE_ADDRESS}}"
+      abi: NexusMarketplace
+      startBlock: {{START_BLOCK}}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Listing
+        - Auction
+        - Bid
+        - Offer
+        - CollectionOffer
+        - NFT
+        - User
+        - MarketplaceStats
+      abis:
+        - name: NexusMarketplace
+          file: ./abis/NexusMarketplace.json
+        - name: ERC721
+          file: ./abis/ERC721.json
+        - name: ERC2981
+          file: ./abis/ERC2981.json
+      eventHandlers:
+        - event: ItemListed(indexed address,indexed uint256,indexed address,uint256,address,uint256,uint8)
+          handler: handleItemListed
+        - event: ItemSold(indexed address,indexed uint256,indexed address,address,uint256,address)
+          handler: handleItemSold
+        - event: ListingCancelled(indexed address,indexed uint256)
+          handler: handleListingCancelled
+        - event: ListingUpdated(indexed address,indexed uint256,uint256)
+          handler: handleListingUpdated
+        - event: AuctionCreated(indexed address,indexed uint256,indexed address,uint256,uint256,uint256,address)
+          handler: handleAuctionCreated
+        - event: BidPlaced(indexed address,indexed uint256,indexed address,uint256)
+          handler: handleBidPlaced
+        - event: AuctionSettled(indexed address,indexed uint256,indexed address,address,uint256,address)
+          handler: handleAuctionSettled
+        - event: AuctionCancelled(indexed address,indexed uint256)
+          handler: handleAuctionCancelled
+        - event: OfferMade(indexed address,indexed uint256,indexed address,uint256,uint256,address)
+          handler: handleOfferMade
+        - event: OfferAccepted(indexed address,indexed uint256,indexed address,address,uint256,address)
+          handler: handleOfferAccepted
+        - event: OfferCancelled(indexed address,indexed uint256,indexed address)
+          handler: handleOfferCancelled
+        - event: CollectionOfferMade(indexed address,indexed address,uint256,uint256,address)
+          handler: handleCollectionOfferMade
+        - event: CollectionOfferAccepted(indexed address,indexed address,indexed address,uint256,uint256,address)
+          handler: handleCollectionOfferAccepted
+        - event: CollectionOfferCancelled(indexed address,indexed address)
+          handler: handleCollectionOfferCancelled
+        - event: FeesWithdrawn(indexed address,uint256)
+          handler: handleFeesWithdrawn
+      file: ./src/marketplace.ts
+
+  # Collection Factory - Deploys new NFT collections
+  - kind: ethereum
+    name: CollectionFactory
+    network: {{NETWORK}}
+    source:
+      address: "{{COLLECTION_FACTORY_ADDRESS}}"
+      abi: CollectionFactory
+      startBlock: {{START_BLOCK}}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Collection
+        - User
+      abis:
+        - name: CollectionFactory
+          file: ./abis/CollectionFactory.json
+        - name: NFTCollection
+          file: ./abis/NFTCollection.json
+      eventHandlers:
+        - event: CollectionCreated(indexed address,indexed address,string,string,uint256,uint96)
+          handler: handleCollectionCreated
+        - event: CollectionVerified(indexed address,bool)
+          handler: handleCollectionVerified
+      file: ./src/factory.ts
+
+templates:
+  # Dynamic data source for each NFT collection
+  - kind: ethereum
+    name: NFTCollection
+    network: {{NETWORK}}
+    source:
+      abi: NFTCollection
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - NFT
+        - Collection
+        - User
+      abis:
+        - name: NFTCollection
+          file: ./abis/NFTCollection.json
+        - name: ERC721
+          file: ./abis/ERC721.json
+      eventHandlers:
+        - event: NFTMinted(indexed address,indexed address,indexed uint256,string)
+          handler: handleNFTMinted
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer
+        - event: RoyaltyUpdated(indexed address,uint96)
+          handler: handleRoyaltyUpdated
+        - event: MintPriceUpdated(uint256)
+          handler: handleMintPriceUpdated
+      file: ./src/collection.ts

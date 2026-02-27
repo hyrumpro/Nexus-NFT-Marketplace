@@ -1,0 +1,274 @@
+# Collection - NFT Collection deployed through factory
+type Collection @entity(immutable: false) {
+  id: ID!
+  address: Bytes!
+  name: String!
+  symbol: String!
+  creator: User!
+  maxSupply: BigInt!
+  totalSupply: BigInt!
+  royaltyPercent: BigInt!
+  royaltyRecipient: Bytes!
+  mintPrice: BigInt!
+  baseURI: String!
+  verified: Boolean!
+
+  # Relationships
+  nfts: [NFT!]! @derivedFrom(field: "collection")
+  listings: [Listing!]! @derivedFrom(field: "collection")
+  auctions: [Auction!]! @derivedFrom(field: "collection")
+  offers: [Offer!]! @derivedFrom(field: "collection")
+
+  # Stats
+  floorPrice: BigInt
+  totalVolume: BigInt!
+  totalSales: BigInt!
+  totalListings: BigInt!
+
+  # Timestamps
+  createdAt: BigInt!
+  updatedAt: BigInt!
+}
+
+# NFT - Individual NFT token
+type NFT @entity(immutable: false) {
+  id: ID!
+  tokenId: BigInt!
+  collection: Collection!
+  owner: User!
+  creator: User!
+  tokenURI: String!
+
+  # Current state
+  currentListing: Listing
+  currentAuction: Auction
+
+  # Tracks buyer addresses with active offers so the subgraph can auto-cancel
+  # competing offers when the NFT is sold (ItemSold / OfferAccepted events).
+  # Stored as lowercase hex strings matching the User entity IDs.
+  offerBuyers: [String!]!
+
+  # Relationships
+  listings: [Listing!]! @derivedFrom(field: "nft")
+  auctions: [Auction!]! @derivedFrom(field: "nft")
+  offers: [Offer!]! @derivedFrom(field: "nft")
+  transfers: [Transfer!]! @derivedFrom(field: "nft")
+
+  # Price history
+  lastSalePrice: BigInt
+  lastSaleCurrency: Bytes
+  lastSaleAt: BigInt
+
+  # Timestamps
+  createdAt: BigInt!
+  updatedAt: BigInt!
+}
+
+# Listing - Fixed price or timed listing
+type Listing @entity(immutable: false) {
+  id: ID!
+  nft: NFT!
+  collection: Collection!
+  seller: User!
+  price: BigInt!
+  currency: Bytes!
+  startTime: BigInt!
+  endTime: BigInt
+  active: Boolean!
+  listingType: ListingType!
+
+  # Transaction info
+  transactionHash: Bytes!
+  blockNumber: BigInt!
+
+  # Timestamps
+  createdAt: BigInt!
+  updatedAt: BigInt!
+  soldAt: BigInt
+  cancelledAt: BigInt
+}
+
+# Auction - Timed auction with bids
+type Auction @entity(immutable: false) {
+  id: ID!
+  nft: NFT!
+  collection: Collection!
+  seller: User!
+
+  # Auction parameters
+  startingPrice: BigInt!
+  reservePrice: BigInt!
+  highestBidder: User
+  highestBid: BigInt!
+  startTime: BigInt!
+  endTime: BigInt!
+  currency: Bytes!
+  status: AuctionStatus!
+
+  # Relationships
+  bids: [Bid!]! @derivedFrom(field: "auction")
+
+  # Transaction info
+  transactionHash: Bytes!
+  blockNumber: BigInt!
+
+  # Timestamps
+  createdAt: BigInt!
+  updatedAt: BigInt!
+  settledAt: BigInt
+  cancelledAt: BigInt
+}
+
+# Bid - Individual bid on an auction (write-once)
+type Bid @entity(immutable: true) {
+  id: ID!
+  auction: Auction!
+  bidder: User!
+  amount: BigInt!
+
+  # Transaction info
+  transactionHash: Bytes!
+  blockNumber: BigInt!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# Offer - Offer on specific NFT
+type Offer @entity(immutable: false) {
+  id: ID!
+  nft: NFT
+  collection: Collection
+  buyer: User!
+  seller: User
+  price: BigInt!
+  currency: Bytes!
+  expiryTime: BigInt!
+  active: Boolean!
+  isCollectionOffer: Boolean!
+  # True when the subgraph auto-cancelled this offer because the NFT was sold
+  # to someone else (ItemSold) or another offer was accepted (OfferAccepted).
+  # The offer is still active on-chain — the buyer must call cancelOffer()
+  # to recover their locked ETH.  Set to false once OfferCancelled fires.
+  autoRejected: Boolean!
+
+  # Transaction info
+  transactionHash: Bytes!
+  blockNumber: BigInt!
+
+  # Timestamps
+  createdAt: BigInt!
+  updatedAt: BigInt!
+  acceptedAt: BigInt
+  cancelledAt: BigInt
+}
+
+# CollectionOffer - Offer on any NFT in a collection
+type CollectionOffer @entity(immutable: false) {
+  id: ID!
+  collection: Collection!
+  buyer: User!
+  price: BigInt!
+  currency: Bytes!
+  expiryTime: BigInt!
+  active: Boolean!
+
+  # Transaction info
+  transactionHash: Bytes!
+  blockNumber: BigInt!
+
+  # Timestamps
+  createdAt: BigInt!
+  updatedAt: BigInt!
+  acceptedAt: BigInt
+  cancelledAt: BigInt
+}
+
+# Transfer - NFT transfer history (write-once)
+type Transfer @entity(immutable: true) {
+  id: ID!
+  nft: NFT!
+  from: User!
+  to: User!
+
+  # Transaction info
+  transactionHash: Bytes!
+  blockNumber: BigInt!
+
+  # Timestamp
+  timestamp: BigInt!
+}
+
+# User - User profile and stats
+type User @entity(immutable: false) {
+  id: ID!
+  address: Bytes!
+
+  # Relationships
+  nftsOwned: [NFT!]! @derivedFrom(field: "owner")
+  nftsCreated: [NFT!]! @derivedFrom(field: "creator")
+  collections: [Collection!]! @derivedFrom(field: "creator")
+  listings: [Listing!]! @derivedFrom(field: "seller")
+  auctions: [Auction!]! @derivedFrom(field: "seller")
+  bids: [Bid!]! @derivedFrom(field: "bidder")
+  offers: [Offer!]! @derivedFrom(field: "buyer")
+  transfersFrom: [Transfer!]! @derivedFrom(field: "from")
+  transfersTo: [Transfer!]! @derivedFrom(field: "to")
+
+  # Stats
+  totalPurchased: BigInt!
+  totalSold: BigInt!
+  totalSpent: BigInt!
+  totalEarned: BigInt!
+
+  # Timestamps
+  createdAt: BigInt!
+  updatedAt: BigInt!
+}
+
+# MarketplaceStats - Global marketplace statistics
+type MarketplaceStats @entity(immutable: false) {
+  id: ID!
+
+  # Counts
+  totalListings: BigInt!
+  activeListings: BigInt!
+  totalAuctions: BigInt!
+  activeAuctions: BigInt!
+  totalSales: BigInt!
+  totalCollections: BigInt!
+  totalNFTs: BigInt!
+  totalUsers: BigInt!
+  totalOffers: BigInt!
+  activeOffers: BigInt!
+
+  # Volume
+  totalVolume: BigInt!
+  totalFeesCollected: BigInt!
+
+  # Timestamps
+  updatedAt: BigInt!
+}
+
+# FeeWithdrawal - Track fee withdrawals (write-once)
+type FeeWithdrawal @entity(immutable: true) {
+  id: ID!
+  recipient: Bytes!
+  amount: BigInt!
+  transactionHash: Bytes!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+}
+
+# Enums
+enum ListingType {
+  FixedPrice
+  TimedAuction
+}
+
+enum AuctionStatus {
+  Active
+  Ended
+  Cancelled
+  Sold
+}

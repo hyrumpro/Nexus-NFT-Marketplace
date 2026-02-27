@@ -1,0 +1,54 @@
+# ================================
+# NexusNFT Root .gitignore
+# ================================
+
+# Environment files (CRITICAL - NEVER COMMIT)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# Node modules (all packages)
+**/node_modules/
+
+# IDE settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code local config
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Build outputs
+**/dist/
+**/build/
+**/.next/
+**/out/
+
+# Coverage
+**/coverage/
+
+# Cache
+**/.cache/
+**/cache/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Lock files (keep pnpm-lock.yaml for reproducibility)
+# pnpm-lock.yaml

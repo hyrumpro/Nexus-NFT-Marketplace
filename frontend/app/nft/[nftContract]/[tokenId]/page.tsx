@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { useNFTDetail, useOffers } from '@/hooks/useListings'
+import { useNFTDetail, useOffers, useNFTHistory } from '@/hooks/useListings'
 import { useNFTContract } from '@/hooks/useNFTContract'
 import { useAccount } from 'wagmi'
 import Image from 'next/image'
@@ -194,6 +194,7 @@ export default function NFTDetailPage() {
 
   const { data: nftData, isLoading: nftLoading } = useNFTDetail(nftContract, tokenId)
   const { data: offers } = useOffers(nftContract, tokenId)
+  const { data: history, isLoading: historyLoading } = useNFTHistory(nftContract, tokenId)
   const { owner, tokenURI, isLoading: contractLoading } = useNFTContract(nftContract, tokenId)
 
   const [metadata, setMetadata] = useState<NFTMetadata | null>(null)
@@ -928,9 +929,78 @@ export default function NFTDetailPage() {
               )}
 
               {activeTab === 'history' && (
-                <p className="text-center text-muted-foreground py-4">
-                  No transaction history available
-                </p>
+                <div className="space-y-2">
+                  {historyLoading ? (
+                    <div className="flex justify-center py-6">
+                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : !history || history.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-4">No history available</p>
+                  ) : (
+                    history.map((event) => {
+                      const date = new Date(Number(event.timestamp) * 1000).toLocaleDateString()
+                      const shortAddr = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
+                      const isAuctionEvent = event.listingType === 'TimedAuction'
+
+                      const labelMap: Record<string, string> = {
+                        minted: 'Minted',
+                        transferred: 'Transferred',
+                        listed: isAuctionEvent ? 'Auction Created' : 'Listed',
+                        sold: isAuctionEvent ? 'Auction Settled' : 'Sold',
+                        delisted: 'Delisted',
+                      }
+                      const badgeMap: Record<string, string> = {
+                        minted: 'bg-purple-500/20 text-purple-400',
+                        transferred: 'bg-blue-500/20 text-blue-400',
+                        listed: 'bg-yellow-500/20 text-yellow-400',
+                        sold: 'bg-green-500/20 text-green-400',
+                        delisted: 'bg-red-500/20 text-red-400',
+                      }
+
+                      return (
+                        <div
+                          key={event.id}
+                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50 gap-3"
+                        >
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeMap[event.type]}`}>
+                                {labelMap[event.type]}
+                              </span>
+                              {event.price && (
+                                <span className="text-sm font-medium">
+                                  {formatEther(BigInt(event.price))} ETH
+                                </span>
+                              )}
+                            </div>
+                            {(event.from || event.to) && (
+                              <p className="text-xs text-muted-foreground">
+                                {event.from && `From ${shortAddr(event.from)}`}
+                                {event.from && event.to && ' → '}
+                                {event.to && shortAddr(event.to)}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {date}
+                            </p>
+                          </div>
+                          {event.txHash && (
+                            <a
+                              href={`https://sepolia.etherscan.io/tx/${event.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-muted-foreground hover:text-primary flex-shrink-0"
+                              title="View on Etherscan"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          )}
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
               )}
             </div>
           </div>

@@ -28,15 +28,13 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  webpack: (config) => {
-    // Stub out optional Node/React-Native modules that WalletConnect and
-    // MetaMask SDK reference but are not needed in a browser environment.
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      'pino-pretty': false,
-      '@react-native-async-storage/async-storage': false,
-    }
-    return config
+  turbopack: {
+    resolveAlias: {
+      // Stub out Node.js-only packages that WalletConnect and wagmi reference
+      // but do not use in a browser environment. Equivalent of webpack false aliases.
+      'pino-pretty': './lib/empty.ts',
+      '@react-native-async-storage/async-storage': './lib/empty.ts',
+    },
   },
 }
 

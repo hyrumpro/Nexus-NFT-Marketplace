@@ -16,9 +16,11 @@ import {
   GET_ACTIVE_AUCTIONS,
   GET_MARKETPLACE_STATS,
   GET_NFTS_BY_OWNER,
+  GET_NFTS_BY_CREATOR,
   GET_USER_PROFILE,
   GET_COLLECTIONS_BY_CREATOR,
-  SEARCH_LISTINGS
+  GET_NFT_TRANSFERS,
+  GET_NFT_LISTING_HISTORY,
 } from '@/lib/graphql/queries'
 import type { Listing, Auction, Offer, Collection, NFT, MarketplaceStats } from '@/types'
 
@@ -75,11 +77,16 @@ export function useListings(params: UseListingsParams = {}) {
         return data.listings.map(mapListing)
       }
 
+      const nowStr = Math.floor(Date.now() / 1000).toString()
+      const now = BigInt(nowStr)
       const where: Record<string, any> = { active: true }
       if (params.collection) where.collection = params.collection.toLowerCase()
       if (params.listingType) where.listingType = params.listingType
       if (params.minPrice) where.price_gte = params.minPrice
       if (params.maxPrice) where.price_lte = params.maxPrice
+      // endTime_gt as a plain column filter — safe for TimedAuction (all have endTime set).
+      // FixedPrice listings have null endTime so we skip this and rely on the client filter.
+      if (params.listingType === 'TimedAuction') where.endTime_gt = nowStr
 
       const query = params.collection ? GET_LISTINGS_BY_COLLECTION : GET_ALL_LISTINGS
       const variables: Record<string, any> = {
@@ -91,7 +98,7 @@ export function useListings(params: UseListingsParams = {}) {
       }
 
       const data = await graphClient.query<{ listings: any[] }>(query, variables)
-      return data.listings.map(mapListing)
+      return data.listings.map(mapListing).filter(l => !l.endTime || l.endTime === 0n || l.endTime > now)
     },
     staleTime: cacheConfig.graph.staleTime,
     gcTime: cacheConfig.graph.gcTime,
@@ -120,23 +127,37 @@ export function useInfiniteListings(params: InfiniteListingsParams = {}) {
         return { listings: [], nextSkip: undefined }
       }
 
-      if (params.searchQuery) {
-        const data = await graphClient.query<{ listings: any[] }>(SEARCH_LISTINGS, {
-          searchText: params.searchQuery,
-          first: pageSize,
-          skip: pageParam,
-        })
-        return {
-          listings: data.listings.map(mapListing),
-          nextSkip: data.listings.length === pageSize ? pageParam + pageSize : undefined,
-        }
-      }
+      const nowStr = Math.floor(Date.now() / 1000).toString()
+      const now = BigInt(nowStr)
 
-      const where: Record<string, any> = { active: true }
-      if (params.collection) where.collection = params.collection.toLowerCase()
-      if (params.listingType) where.listingType = params.listingType
-      if (params.minPrice) where.price_gte = params.minPrice
-      if (params.maxPrice) where.price_lte = params.maxPrice
+      // Column-only filters — The Graph forbids mixing these with or/and in the same object
+      const columnFilters: Record<string, any> = { active: true }
+      if (params.collection) columnFilters.collection = params.collection.toLowerCase()
+      if (params.listingType) columnFilters.listingType = params.listingType
+      if (params.minPrice) columnFilters.price_gte = params.minPrice
+      if (params.maxPrice) columnFilters.price_lte = params.maxPrice
+      // endTime_gt is safe as a column filter only when every result has an endTime set
+      if (params.listingType === 'TimedAuction') columnFilters.endTime_gt = nowStr
+
+      let where: Record<string, any>
+
+      // Server-side search via The Graph's contains filters
+      if (params.searchQuery) {
+        const q = params.searchQuery.trim()
+        const searchOr: Record<string, any>[] = [
+          { collection_: { name_contains_nocase: q } },
+          { collection_: { symbol_contains_nocase: q } },
+        ]
+        // Exact tokenId match when query is a valid positive integer
+        const tokenIdNum = parseInt(q, 10)
+        if (!isNaN(tokenIdNum) && tokenIdNum > 0 && tokenIdNum.toString() === q) {
+          searchOr.push({ nft_: { tokenId: q } })
+        }
+        // 'and' keeps column filters and search 'or' in separate objects — required by The Graph
+        where = { and: [columnFilters, { or: searchOr }] }
+      } else {
+        where = columnFilters
+      }
 
       const data = await graphClient.query<{ listings: any[] }>(GET_ALL_LISTINGS, {
         first: pageSize,
@@ -146,8 +167,11 @@ export function useInfiniteListings(params: InfiniteListingsParams = {}) {
         where,
       })
 
+      // Client-side expiry guard for mixed listing types (FixedPrice has null endTime
+      // so server-side endTime_gt can't be applied; this catches any that slipped through)
+      const listings = data.listings.map(mapListing).filter(l => !l.endTime || l.endTime === 0n || l.endTime > now)
       return {
-        listings: data.listings.map(mapListing),
+        listings,
         nextSkip: data.listings.length === pageSize ? pageParam + pageSize : undefined,
       }
     },
@@ -253,21 +277,24 @@ export function useNFTDetail(nftContract: Address | undefined, tokenId: bigint |
 }
 
 export function useOffers(nftContract: Address | undefined, tokenId: bigint | undefined) {
-  const nftId = nftContract && tokenId !== undefined 
-    ? `${nftContract.toLowerCase()}-${tokenId}` 
+  const nftId = nftContract && tokenId !== undefined
+    ? `${nftContract.toLowerCase()}-${tokenId}`
     : ''
 
   return useQuery({
     queryKey: nftId ? queryKeys.offers.byNFT(nftContract!, tokenId!.toString()) : ['offers', 'disabled'],
     queryFn: async (): Promise<Offer[]> => {
       if (!nftId) return []
-      
-      const data = await graphClient.query<{ offers: any[] }>(GET_OFFERS_FOR_NFT, { 
+
+      const now = Math.floor(Date.now() / 1000).toString()
+
+      const data = await graphClient.query<{ offers: any[] }>(GET_OFFERS_FOR_NFT, {
         nftId,
+        now,
         first: 10,
         skip: 0,
       })
-      
+
       return data.offers.map((o: any) => ({
         id: o.id,
         nftContract: nftContract as Address,
@@ -452,6 +479,47 @@ export function useUserProfile(address: Address | undefined) {
   })
 }
 
+export function useNFTsCreatedBy(creatorAddress: Address | undefined, first: number = 20, skip: number = 0) {
+  return useQuery({
+    queryKey: creatorAddress ? ['nfts-created', creatorAddress] : ['nfts-created', 'disabled'],
+    queryFn: async (): Promise<any[]> => {
+      if (!creatorAddress) return []
+      if (!graphClient.isReady()) return []
+
+      const data = await graphClient.query<{ nfts: any[] }>(GET_NFTS_BY_CREATOR, {
+        creator: creatorAddress.toLowerCase(),
+        first,
+        skip,
+      })
+
+      return (data.nfts || []).map((nft: any) => ({
+        id: nft.id,
+        tokenId: BigInt(nft.tokenId ?? 0),
+        tokenURI: nft.tokenURI,
+        collection: nft.collection
+          ? {
+              id: nft.collection.id,
+              address: nft.collection.address as Address,
+              name: nft.collection.name,
+              symbol: nft.collection.symbol,
+            }
+          : { id: '', address: '' as Address, name: 'Unknown', symbol: '?' },
+        owner: nft.owner?.address as Address,
+        lastSalePrice: nft.lastSalePrice,
+        currentListing: nft.currentListing
+          ? {
+              id: nft.currentListing.id,
+              price: nft.currentListing.price,
+              active: nft.currentListing.active,
+            }
+          : undefined,
+      }))
+    },
+    enabled: !!creatorAddress && graphClient.isReady(),
+    staleTime: cacheConfig.graph.staleTime,
+  })
+}
+
 export function useUserCollections(creatorAddress: Address | undefined, first: number = 20, skip: number = 0) {
   return useQuery({
     queryKey: creatorAddress ? ['user-collections', creatorAddress] : ['user-collections', 'disabled'],
@@ -468,6 +536,90 @@ export function useUserCollections(creatorAddress: Address | undefined, first: n
       return data.collections || []
     },
     enabled: !!creatorAddress && graphClient.isReady(),
+    staleTime: cacheConfig.graph.staleTime,
+  })
+}
+
+export interface NFTHistoryEvent {
+  id: string
+  type: 'minted' | 'transferred' | 'listed' | 'sold' | 'delisted'
+  timestamp: bigint
+  price?: string
+  from?: Address
+  to?: Address
+  txHash?: string
+  listingType?: string
+}
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+export function useNFTHistory(nftContract: Address | undefined, tokenId: bigint | undefined) {
+  const nftId = nftContract && tokenId !== undefined
+    ? `${nftContract.toLowerCase()}-${tokenId}`
+    : ''
+
+  return useQuery({
+    queryKey: nftId ? ['nft-history', nftId] : ['nft-history', 'disabled'],
+    queryFn: async (): Promise<NFTHistoryEvent[]> => {
+      if (!nftId) return []
+
+      const [transfersData, listingsData] = await Promise.all([
+        graphClient.query<{ transfers: any[] }>(GET_NFT_TRANSFERS, { nftId, first: 50 }),
+        graphClient.query<{ listings: any[] }>(GET_NFT_LISTING_HISTORY, { nftId, first: 50 }),
+      ])
+
+      const events: NFTHistoryEvent[] = []
+
+      for (const t of transfersData.transfers || []) {
+        const fromAddr = t.from?.address as Address
+        const isZeroFrom = !fromAddr || fromAddr.toLowerCase() === ZERO_ADDRESS
+        events.push({
+          id: `transfer-${t.id}`,
+          type: isZeroFrom ? 'minted' : 'transferred',
+          timestamp: BigInt(t.timestamp),
+          from: isZeroFrom ? undefined : fromAddr,
+          to: t.to?.address as Address,
+          txHash: t.transactionHash,
+        })
+      }
+
+      for (const l of listingsData.listings || []) {
+        events.push({
+          id: `listed-${l.id}`,
+          type: 'listed',
+          timestamp: BigInt(l.createdAt),
+          price: l.price,
+          from: l.seller?.address as Address,
+          txHash: l.transactionHash,
+          listingType: l.listingType,
+        })
+
+        if (l.soldAt) {
+          events.push({
+            id: `sold-${l.id}`,
+            type: 'sold',
+            timestamp: BigInt(l.soldAt),
+            price: l.price,
+            from: l.seller?.address as Address,
+            listingType: l.listingType,
+          })
+        }
+
+        if (l.cancelledAt) {
+          events.push({
+            id: `delisted-${l.id}`,
+            type: 'delisted',
+            timestamp: BigInt(l.cancelledAt),
+            from: l.seller?.address as Address,
+            listingType: l.listingType,
+          })
+        }
+      }
+
+      events.sort((a, b) => (b.timestamp > a.timestamp ? 1 : b.timestamp < a.timestamp ? -1 : 0))
+      return events
+    },
+    enabled: !!nftId && graphClient.isReady(),
     staleTime: cacheConfig.graph.staleTime,
   })
 }

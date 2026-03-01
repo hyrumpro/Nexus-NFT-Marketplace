@@ -82,11 +82,17 @@ export function ListingCard({ listing }: ListingCardProps) {
             </div>
           )}
 
-          {/* Time left badge */}
-          {isAuction && timeLeft > 0 && (
+          {/* Time left badge — shown for any listing with an expiry */}
+          {endTime && timeLeft > 0 && (
             <div className="absolute top-2 right-2 flex items-center gap-1 bg-background/80 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-medium z-10">
               <Clock className="w-3 h-3 text-primary" />
               <span className="text-primary">{formatTimeLeft(timeLeft)}</span>
+            </div>
+          )}
+          {endTime && timeLeft === 0 && (
+            <div className="absolute top-2 right-2 flex items-center gap-1 bg-destructive/20 backdrop-blur-sm border border-destructive/30 px-2 py-1 rounded-md text-xs font-medium text-destructive z-10">
+              <Clock className="w-3 h-3" />
+              Expired
             </div>
           )}
 

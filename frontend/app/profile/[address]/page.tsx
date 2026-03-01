@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi'
 import { Address, formatEther } from 'viem'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useListings, useUserNFTs, useUserProfile, useUserCollections, useOffersReceived } from '@/hooks/useListings'
+import { useListings, useUserNFTs, useNFTsCreatedBy, useUserProfile, useUserCollections, useOffersReceived } from '@/hooks/useListings'
 import { useCancelOffer, useCancelListing } from '@/hooks/useTransactions'
 import { ipfsToHttp, fetchNFTMetadata, NFTMetadata, shortenAddress } from '@/lib/utils'
 import { ExternalLink, Loader2, AlertTriangle, Layers, Clock, RotateCcw } from 'lucide-react'
@@ -15,8 +15,8 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
   const resolvedParams = use(params)
   const profileAddress = resolvedParams.address as Address
   const { address: connectedAddress } = useAccount()
-  const [activeTab, setActiveTab] = useState('owned')
-  
+  const [activeTab, setActiveTab] = useState('portfolio')
+
   const isOwnProfile = connectedAddress?.toLowerCase() === profileAddress.toLowerCase()
   const isGraphConfigured = graphClient.isReady()
 
@@ -26,6 +26,7 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
   })
 
   const { data: ownedNFTs, isLoading: nftsLoading, isError: nftsError } = useUserNFTs(profileAddress, 20)
+  const { data: createdNFTs, isLoading: createdLoading } = useNFTsCreatedBy(profileAddress, 20)
   const { data: userProfile, isLoading: profileLoading } = useUserProfile(profileAddress)
   const { data: userCollections, isLoading: collectionsLoading } = useUserCollections(profileAddress, 20)
   const { data: offersReceived, isLoading: offersReceivedLoading } = useOffersReceived(
@@ -34,7 +35,15 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
   const cancelOfferHook = useCancelOffer()
   const cancelListingHook = useCancelListing()
 
-  const isLoading = profileLoading
+  // Merge owned and created NFTs, deduplicating by id
+  const portfolioLoading = nftsLoading || createdLoading
+  const portfolioNFTs = (() => {
+    if (!ownedNFTs && !createdNFTs) return undefined
+    const map = new Map<string, any>()
+    for (const nft of ownedNFTs || []) map.set(nft.id, nft)
+    for (const nft of createdNFTs || []) { if (!map.has(nft.id)) map.set(nft.id, nft) }
+    return Array.from(map.values())
+  })()
 
   return (
     <div className="min-h-screen">
@@ -106,8 +115,7 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
         <div className="border-b mb-8">
           <div className="flex gap-8">
             {[
-              { id: 'owned', label: 'Owned', count: ownedNFTs?.length },
-              { id: 'created', label: 'Created', count: userProfile?.nftsOwned?.length || 0 },
+              { id: 'portfolio', label: 'Portfolio', count: portfolioNFTs?.length },
               { id: 'collections', label: 'Collections', count: userCollections?.length },
               { id: 'listings', label: 'Listings', count: userListings?.length },
               { id: 'offers_made', label: 'Offers Made', count: userProfile?.offers?.length || 0 },
@@ -136,16 +144,8 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
           </div>
         </div>
 
-        {activeTab === 'owned' && isGraphConfigured && (
-          <NFTGrid nfts={ownedNFTs} isLoading={nftsLoading} isError={nftsError} emptyMessage="No NFTs owned" isOwnProfile={isOwnProfile} />
-        )}
-
-        {activeTab === 'created' && isGraphConfigured && (
-          <NFTGrid nfts={userProfile?.nftsOwned?.map((nft: any) => ({
-            ...nft,
-            tokenId: BigInt(nft.tokenId),
-            collection: { address: nft.collection?.address },
-          }))} isLoading={profileLoading} emptyMessage="No NFTs created" isOwnProfile={isOwnProfile} />
+        {activeTab === 'portfolio' && isGraphConfigured && (
+          <NFTGrid nfts={portfolioNFTs} isLoading={portfolioLoading} isError={nftsError} emptyMessage="No NFTs in portfolio" isOwnProfile={isOwnProfile} />
         )}
 
         {activeTab === 'collections' && isGraphConfigured && (
@@ -578,7 +578,7 @@ function EmptyState({ message, isOwnProfile }: { message: string; isOwnProfile: 
       <p className="text-xl text-muted-foreground">{message}</p>
       {isOwnProfile && (
         <Link href="/create" className="btn-primary mt-4 inline-flex">
-          Create or List NFT
+          Create NFT
         </Link>
       )}
     </div>

@@ -1,20 +1,19 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId, useReadContract } from 'wagmi'
 import { parseEther, isAddress, Address } from 'viem'
-import { Upload, ImageIcon, Loader2, Tag, Plus, Trash2 } from 'lucide-react'
+import { Upload, ImageIcon, Loader2, Plus, Trash2, Hash } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { ConnectButton } from '@/components/ConnectButton'
-import { useListNFT } from '@/hooks/useTransactions'
-import { useUserNFTs } from '@/hooks/useListings'
+import { useUserCollections } from '@/hooks/useListings'
 import { NFT_COLLECTION_ABI, NFT_COLLECTION_FACTORY_ABI } from '@/contracts/abis'
 import { contractAddresses } from '@/config/contracts'
 import { ipfsToHttp, fetchNFTMetadata, NFTMetadata } from '@/lib/utils'
 
-type CreateMode = 'mint' | 'list' | 'collection'
+type CreateMode = 'mint' | 'collection'
 
 async function uploadFileToPinata(file: File): Promise<string> {
   const formData = new FormData()
@@ -59,55 +58,6 @@ function CreatePageInner() {
   const chainId = useChainId()
   const searchParams = useSearchParams()
   const [mode, setMode] = useState<CreateMode>('mint')
-
-  // ── List NFT ──────────────────────────────────────────────
-  const [listContract, setListContract] = useState('')
-  const [listTokenId, setListTokenId] = useState('')
-  const [listPrice, setListPrice] = useState('')
-  const [listDuration, setListDuration] = useState('')
-  const [selectedNFT, setSelectedNFT] = useState<any>(null)
-
-  const { data: userNFTs, isLoading: userNFTsLoading } = useUserNFTs(address)
-
-  const { list, approve, continueAfterApproval, state: listState, resetState: resetList } = useListNFT()
-
-  // Track listing params across the approval step so we can continue after approval confirms
-  const pendingListRef = useRef<{ nftContract: Address; tokenId: bigint; price: string; durationSeconds?: bigint } | null>(null)
-
-  useEffect(() => {
-    if (listState.status === 'approved' && pendingListRef.current) {
-      const p = pendingListRef.current
-      pendingListRef.current = null
-      continueAfterApproval(p.nftContract, p.tokenId, p.price, p.durationSeconds)
-    }
-  }, [listState.status, continueAfterApproval])
-
-  useEffect(() => {
-    if (listState.status === 'success') {
-      // toast already fired by useListNFT with the explorer link — just reset form
-      resetList()
-      setListContract(''); setListTokenId(''); setListPrice(''); setListDuration('')
-      setSelectedNFT(null)
-    }
-    // errors are also toasted by useListNFT — no duplicate needed
-  }, [listState.status]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleList = async () => {
-    if (!isAddress(listContract)) { toast.error('Invalid NFT contract address'); return }
-    if (!listTokenId || isNaN(Number(listTokenId))) { toast.error('Invalid token ID'); return }
-    if (!listPrice || parseFloat(listPrice) <= 0) { toast.error('Price must be greater than 0'); return }
-    const durationSeconds = listDuration ? BigInt(Math.floor(parseFloat(listDuration) * 3600)) : undefined
-    // Save params so the approval-continue effect can resume listing after approval confirms
-    pendingListRef.current = { nftContract: listContract as Address, tokenId: BigInt(listTokenId), price: listPrice, durationSeconds }
-    const result = await list(listContract as Address, BigInt(listTokenId), listPrice, durationSeconds)
-    if (!result?.needsApproval) {
-      pendingListRef.current = null
-    } else {
-      await approve(listContract as Address)
-    }
-  }
-
-  const isListBusy = ['preparing', 'approving', 'approval_confirming', 'approved', 'executing', 'confirming'].includes(listState.status)
 
   // ── Create Collection ─────────────────────────────────────
   const [colName, setColName] = useState('')
@@ -173,11 +123,12 @@ function CreatePageInner() {
   }
 
   // ── Mint NFT ──────────────────────────────────────────────
+  const { data: userCollections, isLoading: collectionsLoading } = useUserCollections(address)
+  const [selectedCollectionData, setSelectedCollectionData] = useState<any>(null)
   const [mintImage, setMintImage] = useState<File | null>(null)
   const [mintName, setMintName] = useState('')
   const [mintDescription, setMintDescription] = useState('')
   const [mintCollection, setMintCollection] = useState('')
-  const [mintTokenId, setMintTokenId] = useState('')
   const [mintAttributes, setMintAttributes] = useState<{ trait_type: string; value: string }[]>([])
   const [isMinting, setIsMinting] = useState(false)
 
@@ -189,14 +140,6 @@ function CreatePageInner() {
       setMode('mint')
     }
   }, [searchParams])
-
-  // Read the collection's mintPrice so we can send the correct ETH value
-  const { data: collectionMintPrice } = useReadContract({
-    address: isAddress(mintCollection) ? (mintCollection as Address) : undefined,
-    abi: NFT_COLLECTION_ABI,
-    functionName: 'mintPrice',
-    query: { enabled: isAddress(mintCollection) },
-  })
 
   // Read totalSupply to suggest the next token ID
   const { data: collectionTotalSupply } = useReadContract({
@@ -222,13 +165,6 @@ function CreatePageInner() {
     query: { enabled: isAddress(mintCollection) && !!minterRole && !!address },
   })
 
-  // Auto-populate token ID when collection address is set and field is empty
-  useEffect(() => {
-    if (collectionTotalSupply !== undefined && mintTokenId === '') {
-      setMintTokenId(((collectionTotalSupply as bigint) + 1n).toString())
-    }
-  }, [collectionTotalSupply, mintCollection]) // eslint-disable-line react-hooks/exhaustive-deps
-
   const { writeContract: writeMint, data: mintHash, isPending: mintPending } = useWriteContract()
   const { isSuccess: mintTxSuccess, isError: mintTxError } = useWaitForTransactionReceipt({
     hash: mintHash,
@@ -241,7 +177,8 @@ function CreatePageInner() {
       toast.success('NFT minted successfully!', {
         action: { label: 'View on Etherscan', onClick: () => window.open(explorerUrl, '_blank') },
       })
-      setMintImage(null); setMintName(''); setMintDescription(''); setMintTokenId(''); setMintAttributes([])
+      setMintImage(null); setMintName(''); setMintDescription(''); setMintCollection(''); setMintAttributes([])
+      setSelectedCollectionData(null)
       setIsMinting(false)
     }
   }, [mintTxSuccess, mintHash])
@@ -253,8 +190,12 @@ function CreatePageInner() {
   const handleMint = async () => {
     if (!mintImage) { toast.error('Please upload an image'); return }
     if (!mintName.trim()) { toast.error('NFT name is required'); return }
-    if (!isAddress(mintCollection)) { toast.error('Invalid collection address'); return }
-    if (!mintTokenId || isNaN(Number(mintTokenId))) { toast.error('Invalid token ID'); return }
+    if (!isAddress(mintCollection)) { toast.error('Please select a collection'); return }
+
+    const nextTokenId = collectionTotalSupply !== undefined
+      ? (collectionTotalSupply as bigint) + 1n
+      : undefined
+    if (nextTokenId === undefined) { toast.error('Could not read collection supply — try again'); return }
 
     setIsMinting(true)
     const uploadToastId = 'mint-upload'
@@ -275,9 +216,8 @@ function CreatePageInner() {
       writeMint({
         address: mintCollection as Address,
         abi: NFT_COLLECTION_ABI,
-        functionName: 'mintWithPrice',
-        args: [address as Address, BigInt(mintTokenId), metadataURI],
-        value: collectionMintPrice ? (collectionMintPrice as bigint) : 0n,
+        functionName: 'mint',
+        args: [address as Address, nextTokenId, metadataURI],
       })
     } catch (err: any) {
       toast.dismiss(uploadToastId)
@@ -305,12 +245,6 @@ function CreatePageInner() {
     )
   }
 
-  const tabs = [
-    { id: 'mint' as const, label: 'Mint New NFT' },
-    { id: 'list' as const, label: 'List Existing NFT' },
-    { id: 'collection' as const, label: 'Create Collection' },
-  ]
-
   return (
     <div className="min-h-screen">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -318,11 +252,14 @@ function CreatePageInner() {
           Create <span className="gradient-text">Something</span>
         </h1>
         <p className="text-muted-foreground mb-8">
-          Mint new NFTs, list your existing NFTs, or create a new collection
+          Mint new NFTs or create a new collection
         </p>
 
         <div className="flex gap-2 mb-8 flex-wrap">
-          {tabs.map((tab) => (
+          {[
+            { id: 'mint' as const, label: 'Mint New NFT' },
+            { id: 'collection' as const, label: 'Create Collection' },
+          ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setMode(tab.id)}
@@ -393,37 +330,125 @@ function CreatePageInner() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2">Collection Address *</label>
-                  <input
-                    type="text"
-                    value={mintCollection}
-                    onChange={(e) => setMintCollection(e.target.value)}
-                    placeholder="0x…"
-                    className="input w-full"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    The NFTCollection contract where this token will be minted
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Token ID *</label>
-                  <input
-                    type="number"
-                    value={mintTokenId}
-                    onChange={(e) => setMintTokenId(e.target.value)}
-                    placeholder="1"
-                    min="0"
-                    className="input w-full"
-                  />
-                  {collectionTotalSupply !== undefined && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {(collectionTotalSupply as bigint) === 0n
-                        ? 'No NFTs minted yet — token ID 1 suggested'
-                        : `${(collectionTotalSupply as bigint).toString()} NFT(s) minted — next suggested: ${((collectionTotalSupply as bigint) + 1n).toString()}`
-                      }
-                    </p>
+                  <label className="block text-sm font-medium mb-2">Collection *</label>
+
+                  {isAddress(mintCollection) ? (
+                    /* ── Selected state ─────────────────────── */
+                    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-primary/40 bg-primary/5">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm truncate">
+                          {selectedCollectionData?.name ?? mintCollection}
+                          {selectedCollectionData?.symbol && (
+                            <span className="ml-1.5 text-xs text-muted-foreground font-normal">
+                              ({selectedCollectionData.symbol})
+                            </span>
+                          )}
+                        </p>
+                        {selectedCollectionData && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {selectedCollectionData.totalSupply ?? 0} / {selectedCollectionData.maxSupply} minted
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground/60 font-mono truncate mt-0.5">
+                          {mintCollection}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setMintCollection('')
+                          setSelectedCollectionData(null)
+                        }}
+                        className="shrink-0 text-xs text-muted-foreground hover:text-foreground border border-border/50 px-3 py-1.5 rounded-lg hover:bg-muted/50 transition-colors"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    /* ── Picker state ────────────────────────── */
+                    <div className="space-y-3">
+                      {/* User's collections */}
+                      {collectionsLoading && (
+                        <div className="grid grid-cols-2 gap-2">
+                          {[0, 1].map((i) => (
+                            <div key={i} className="h-[4.5rem] rounded-xl border border-border/50 bg-muted animate-pulse" />
+                          ))}
+                        </div>
+                      )}
+
+                      {!collectionsLoading && userCollections && userCollections.length > 0 && (
+                        <div className="grid grid-cols-2 gap-2">
+                          {userCollections.map((col: any) => (
+                            <button
+                              key={col.address}
+                              type="button"
+                              onClick={() => {
+                                setMintCollection(col.address)
+                                setSelectedCollectionData(col)
+                              }}
+                              className="text-left px-3 py-2.5 rounded-xl border border-border/50 hover:border-primary/60 hover:bg-primary/5 transition-all duration-150"
+                            >
+                              <p className="font-semibold text-sm truncate">{col.name}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {col.symbol} · {col.totalSupply ?? 0}/{col.maxSupply} minted
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {!collectionsLoading && (!userCollections || userCollections.length === 0) && (
+                        <div className="py-5 text-center border border-dashed border-border/50 rounded-xl">
+                          <p className="text-sm text-muted-foreground">No collections yet.</p>
+                          <button
+                            type="button"
+                            onClick={() => setMode('collection')}
+                            className="text-xs text-primary hover:text-primary/80 mt-1 transition-colors"
+                          >
+                            Create a collection first →
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Manual address fallback */}
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1.5">
+                          Or enter a collection address manually
+                        </p>
+                        <input
+                          type="text"
+                          value={mintCollection}
+                          onChange={(e) => {
+                            setMintCollection(e.target.value)
+                            setSelectedCollectionData(null)
+                          }}
+                          placeholder="0x…"
+                          className="input w-full"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
+                {/* Token ID — auto-assigned, not editable */}
+                {isAddress(mintCollection) && (
+                  <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-border/40 bg-muted/20">
+                    <Hash className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground mb-0.5">Token ID (auto-assigned)</p>
+                      {collectionTotalSupply !== undefined ? (
+                        <p className="text-sm font-semibold">
+                          #{((collectionTotalSupply as bigint) + 1n).toString()}
+                          <span className="ml-2 text-xs font-normal text-muted-foreground">
+                            ({(collectionTotalSupply as bigint).toString()} minted so far)
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Loading…
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-medium">Properties (optional)</label>
@@ -489,120 +514,6 @@ function CreatePageInner() {
           </div>
         )}
 
-        {/* ── LIST ── */}
-        {mode === 'list' && (
-          <div className="card p-6">
-            <h2 className="text-xl font-semibold mb-2">List Existing NFT</h2>
-
-            {!selectedNFT ? (
-              /* ── Step 1: Pick an NFT ── */
-              <>
-                <p className="text-muted-foreground text-sm mb-6">
-                  Select one of your NFTs to list it on the marketplace.
-                </p>
-
-                {/* Loading skeleton */}
-                {userNFTsLoading && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="rounded-xl border border-border/50 bg-card overflow-hidden">
-                        <div className="aspect-square bg-muted animate-pulse" />
-                        <div className="p-3 space-y-2">
-                          <div className="h-3 w-1/2 bg-muted rounded animate-pulse" />
-                          <div className="h-4 w-3/4 bg-muted rounded animate-pulse" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Empty state */}
-                {!userNFTsLoading && (!userNFTs || userNFTs.length === 0) && (
-                  <div className="py-20 text-center text-muted-foreground">
-                    <div className="text-6xl mb-4 opacity-20 select-none">◈</div>
-                    <p className="font-medium text-foreground/70">No NFTs found in your wallet</p>
-                    <p className="text-sm mt-1 max-w-xs mx-auto">
-                      Mint an NFT first, or check that the subgraph has indexed your tokens.
-                    </p>
-                  </div>
-                )}
-
-                {/* NFT selection grid */}
-                {!userNFTsLoading && userNFTs && userNFTs.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {userNFTs.map((nft: any) => (
-                      <SelectableNFTCard
-                        key={nft.id}
-                        nft={nft}
-                        onSelect={() => {
-                          setSelectedNFT(nft)
-                          setListContract(nft.collection?.address || '')
-                          setListTokenId(nft.tokenId.toString())
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              /* ── Step 2: Set price & duration ── */
-              <div className="max-w-xl">
-                <SelectedNFTPreview
-                  nft={selectedNFT}
-                  onChangeClick={() => {
-                    setSelectedNFT(null)
-                    setListContract('')
-                    setListTokenId('')
-                  }}
-                />
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Price (ETH) *</label>
-                    <input
-                      type="number"
-                      value={listPrice}
-                      onChange={(e) => setListPrice(e.target.value)}
-                      placeholder="0.01"
-                      step="0.001"
-                      min="0"
-                      className="input w-full"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Duration (hours) — leave empty for no expiry
-                    </label>
-                    <input
-                      type="number"
-                      value={listDuration}
-                      onChange={(e) => setListDuration(e.target.value)}
-                      placeholder="e.g. 72"
-                      min="1"
-                      className="input w-full"
-                    />
-                  </div>
-
-                  {listState.status !== 'idle' && listState.status !== 'success' && listState.status !== 'error' && (
-                    <div className="text-sm p-3 rounded-lg bg-primary/10 text-primary flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
-                      {listState.message}
-                    </div>
-                  )}
-
-                  <button onClick={handleList} disabled={isListBusy} className="btn-primary w-full">
-                    {isListBusy ? (
-                      <><Loader2 className="w-4 h-4 animate-spin mr-2 inline" />Processing…</>
-                    ) : (
-                      'List NFT'
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* ── COLLECTION ── */}
         {mode === 'collection' && (
           <div className="card p-6">
@@ -659,7 +570,8 @@ function CreatePageInner() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Mint Price (ETH) — leave empty for free mint
+                  Public Mint Price (ETH){' '}
+                  <span className="font-normal text-muted-foreground">— optional</span>
                 </label>
                 <input
                   type="number"
@@ -670,6 +582,9 @@ function CreatePageInner() {
                   min="0"
                   className="input w-full"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Leave empty for free. As the creator you always mint for free — this price is only charged when others call <span className="font-mono">mintWithPrice</span> on your contract.
+                </p>
               </div>
               <button
                 onClick={handleCreateCollection}
@@ -689,145 +604,6 @@ function CreatePageInner() {
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-// ── Helper components for the NFT picker ──────────────────────────────────────
-
-function SelectableNFTCard({ nft, onSelect }: { nft: any; onSelect: () => void }) {
-  const [metadata, setMetadata] = useState<NFTMetadata | null>(null)
-  const [imageError, setImageError] = useState(false)
-  const [isHovered, setIsHovered] = useState(false)
-
-  useEffect(() => {
-    if (nft.tokenURI) {
-      fetchNFTMetadata(nft.tokenURI).then(setMetadata).catch(() => {})
-    }
-  }, [nft.tokenURI])
-
-  const displayImage = ipfsToHttp(metadata?.image || nft.tokenURI)
-  const displayName = metadata?.name || `#${nft.tokenId?.toString()}`
-  const isListed = nft.currentListing?.active
-
-  return (
-    <div
-      onClick={onSelect}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={`relative rounded-xl overflow-hidden cursor-pointer transition-all duration-200 bg-card border ${
-        isHovered
-          ? 'border-primary/60 shadow-[0_0_20px_hsl(var(--primary)/0.12)]'
-          : 'border-border/50 shadow-[0_4px_16px_rgba(0,0,0,0.25)]'
-      }`}
-    >
-      {/* Shimmer line on hover */}
-      <div
-        className={`absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary to-transparent transition-opacity duration-300 z-10 ${
-          isHovered ? 'opacity-100' : 'opacity-0'
-        }`}
-      />
-
-      {/* Image */}
-      <div className="relative aspect-square overflow-hidden bg-muted">
-        {!imageError && displayImage ? (
-          <Image
-            src={displayImage}
-            alt={displayName}
-            fill
-            className="object-cover transition-transform duration-500"
-            style={{ transform: isHovered ? 'scale(1.07)' : 'scale(1)' }}
-            onError={() => setImageError(true)}
-            unoptimized
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/8 to-accent/8">
-            <div className="text-5xl opacity-20 select-none">◈</div>
-          </div>
-        )}
-
-        {/* Already listed badge */}
-        {isListed && (
-          <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/80 backdrop-blur-sm border border-primary/30 px-2 py-1 rounded-md text-xs font-medium text-primary z-10">
-            <Tag className="w-3 h-3" />
-            Listed
-          </div>
-        )}
-
-        {/* Hover overlay */}
-        <div
-          className={`absolute inset-0 bg-gradient-to-t from-background/90 via-background/10 to-transparent transition-opacity duration-200 flex items-end ${
-            isHovered ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          <div className="w-full px-3 pb-3">
-            <span className="btn-primary w-full text-center text-xs py-1.5 block rounded-lg">
-              Select
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Card info */}
-      <div className="p-3">
-        <p className="text-xs text-muted-foreground truncate">{nft.collection?.name || 'Unknown'}</p>
-        <p className="font-semibold text-sm truncate">{displayName}</p>
-      </div>
-    </div>
-  )
-}
-
-function SelectedNFTPreview({ nft, onChangeClick }: { nft: any; onChangeClick: () => void }) {
-  const [metadata, setMetadata] = useState<NFTMetadata | null>(null)
-  const [imageError, setImageError] = useState(false)
-
-  useEffect(() => {
-    if (nft.tokenURI) {
-      fetchNFTMetadata(nft.tokenURI).then(setMetadata).catch(() => {})
-    }
-  }, [nft.tokenURI])
-
-  const displayImage = ipfsToHttp(metadata?.image || nft.tokenURI)
-  const displayName = metadata?.name || `#${nft.tokenId?.toString()}`
-
-  return (
-    <div className="flex items-center gap-4 p-4 rounded-xl border border-border/50 bg-muted/20 mb-6">
-      {/* Thumbnail */}
-      <div className="relative w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden bg-muted border border-border/50">
-        {!imageError && displayImage ? (
-          <Image
-            src={displayImage}
-            alt={displayName}
-            fill
-            className="object-cover"
-            onError={() => setImageError(true)}
-            unoptimized
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10">
-            <span className="text-xl opacity-30 select-none">◈</span>
-          </div>
-        )}
-      </div>
-
-      {/* Info */}
-      <div className="min-w-0 flex-1">
-        <p className="text-xs text-muted-foreground truncate">
-          {nft.collection?.name || 'Unknown Collection'}
-        </p>
-        <p className="font-semibold truncate">{displayName}</p>
-        <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">
-          {nft.collection?.address}
-        </p>
-      </div>
-
-      {/* Change button */}
-      <button
-        onClick={onChangeClick}
-        className="ml-auto flex-shrink-0 text-xs text-muted-foreground hover:text-foreground border border-border/50 px-3 py-1.5 rounded-lg hover:bg-muted/50 transition-colors"
-      >
-        Change
-      </button>
     </div>
   )
 }

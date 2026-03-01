@@ -2,17 +2,20 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useAccount, useDisconnect, useBalance, useChainId } from 'wagmi'
-import { ChevronDown, Menu, X, User, Plus, LogOut, Zap } from 'lucide-react'
+import { useAccount, useDisconnect, useBalance, useChainId, useReadContract } from 'wagmi'
+import { ChevronDown, Menu, X, User, Plus, LogOut, Zap, Shield } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import { formatEther } from 'viem'
+import { formatEther, type Abi, type Address } from 'viem'
 import { ConnectButton } from './ConnectButton'
-import { getSupportedChain } from '@/config/contracts'
+import { AdminPanel } from './AdminPanel'
+import { getSupportedChain, contractAddresses } from '@/config/contracts'
+import { NFT_MARKETPLACE_ABI } from '@/contracts/abis'
 
 const navLinks = [
   { href: '/', label: 'Home' },
   { href: '/explore', label: 'Explore' },
   { href: '/create', label: 'Create' },
+  { href: '/sell', label: 'Sell' },
 ]
 
 export function Navbar() {
@@ -23,9 +26,27 @@ export function Navbar() {
   const { data: balance } = useBalance({ address })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [adminOpen, setAdminOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const chain = getSupportedChain(chainId)
+
+  const marketplaceAddress = chainId
+    ? (contractAddresses.nftMarketplace as Record<number, Address>)[chainId]
+    : undefined
+
+  const { data: contractOwner } = useReadContract({
+    address: marketplaceAddress,
+    abi: NFT_MARKETPLACE_ABI as Abi,
+    functionName: 'owner',
+    query: { enabled: !!marketplaceAddress && isConnected },
+  })
+
+  const isOwner = !!(
+    address &&
+    contractOwner &&
+    address.toLowerCase() === (contractOwner as string).toLowerCase()
+  )
 
   // Defer wallet-dependent UI until after hydration.
   useEffect(() => setMounted(true), [])
@@ -91,9 +112,36 @@ export function Navbar() {
                 Create
               </Link>
 
+              {/* Admin button — only visible to contract owner */}
+              {isOwner && (
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      setAdminOpen(!adminOpen)
+                      setProfileOpen(false)
+                    }}
+                    title="Admin Panel"
+                    className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 transition-all duration-200 ${
+                      adminOpen
+                        ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400'
+                        : 'border-border/60 bg-muted/20 hover:bg-yellow-500/10 hover:border-yellow-500/30 text-muted-foreground hover:text-yellow-400'
+                    }`}
+                  >
+                    <Shield className="w-4 h-4" />
+                    <span className="hidden sm:inline text-sm font-medium">Admin</span>
+                  </button>
+                  {adminOpen && (
+                    <AdminPanel onClose={() => setAdminOpen(false)} />
+                  )}
+                </div>
+              )}
+
               <div className="relative">
                 <button
-                  onClick={() => setProfileOpen(!profileOpen)}
+                  onClick={() => {
+                    setProfileOpen(!profileOpen)
+                    setAdminOpen(false)
+                  }}
                   className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 hover:bg-muted/50 hover:border-border px-3 py-2 transition-all duration-200"
                 >
                   <div className="relative w-6 h-6">

@@ -16,6 +16,7 @@ export const GET_ALL_LISTINGS = gql`
       orderDirection: $orderDirection
     ) {
       id
+      active
       price
       currency
       startTime
@@ -61,6 +62,7 @@ export const GET_LISTINGS_BY_COLLECTION = gql`
       orderDirection: $orderDirection
     ) {
       id
+      active
       price
       currency
       startTime
@@ -223,13 +225,14 @@ export const GET_NFT_DETAIL = gql`
 `
 
 export const GET_OFFERS_FOR_NFT = gql`
-  query GetOffersForNFT($nftId: String!, $first: Int, $skip: Int) {
+  query GetOffersForNFT($nftId: String!, $now: BigInt!, $first: Int, $skip: Int) {
     offers(
       first: $first
       skip: $skip
-      where: { 
+      where: {
         nft: $nftId,
-        active: true 
+        active: true,
+        expiryTime_gt: $now
       }
       orderBy: price
       orderDirection: desc
@@ -238,6 +241,7 @@ export const GET_OFFERS_FOR_NFT = gql`
       price
       currency
       expiryTime
+      active
       buyer {
         address
       }
@@ -427,13 +431,51 @@ export const GET_COLLECTIONS_BY_CREATOR = gql`
   }
 `
 
+export const GET_NFTS_BY_CREATOR = gql`
+  query GetNFTsByCreator($creator: String!, $first: Int, $skip: Int) {
+    nfts(
+      first: $first
+      skip: $skip
+      where: { creator: $creator }
+      orderBy: createdAt
+      orderDirection: desc
+    ) {
+      id
+      tokenId
+      tokenURI
+      collection {
+        id
+        address
+        name
+        symbol
+      }
+      owner {
+        address
+      }
+      currentListing {
+        id
+        price
+        active
+      }
+      lastSalePrice
+    }
+  }
+`
+
 export const GET_OFFERS_RECEIVED = gql`
   query GetOffersReceived($owner: String!, $first: Int) {
     offers(
       first: $first
       where: {
-        nft_: { owner: $owner }
-        active: true
+        and: [
+          { active: true }
+          { or: [
+            # NFT is not listed — user still holds it on-chain
+            { nft_: { owner: $owner } }
+            # NFT is listed — marketplace holds it, but user is the seller
+            { nft_: { currentListing_: { seller: $owner } } }
+          ]}
+        ]
       }
       orderBy: price
       orderDirection: desc
@@ -519,3 +561,48 @@ export const SEARCH_LISTINGS = gql`
     }
   }
 `
+
+export const GET_NFT_TRANSFERS = gql`
+  query GetNFTTransfers($nftId: String!, $first: Int) {
+    transfers(
+      first: $first
+      where: { nft: $nftId }
+      orderBy: timestamp
+      orderDirection: desc
+    ) {
+      id
+      from {
+        address
+      }
+      to {
+        address
+      }
+      transactionHash
+      timestamp
+    }
+  }
+`
+
+export const GET_NFT_LISTING_HISTORY = gql`
+  query GetNFTListingHistory($nftId: String!, $first: Int) {
+    listings(
+      first: $first
+      where: { nft: $nftId }
+      orderBy: createdAt
+      orderDirection: desc
+    ) {
+      id
+      price
+      listingType
+      active
+      createdAt
+      soldAt
+      cancelledAt
+      transactionHash
+      seller {
+        address
+      }
+    }
+  }
+`
+

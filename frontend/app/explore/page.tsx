@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useInfiniteListings } from '@/hooks/useListings'
 import { ListingCard, ListingCardSkeleton } from '@/components/ListingCard'
 import { useInView } from 'react-intersection-observer'
@@ -12,23 +13,46 @@ type ViewMode = 'grid' | 'list'
 type ListingType = 'all' | 'fixed' | 'auction'
 
 export default function ExplorePage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [sort, setSort] = useState<SortOption>('recent')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [searchQuery, setSearchQuery] = useState(() => searchParams?.get('q') ?? '')
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams?.get('q') ?? '')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [showFilters, setShowFilters] = useState(false)
   const [listingType, setListingType] = useState<ListingType>('all')
   const [minPrice, setMinPrice] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
-  
-  const isGraphConfigured = graphClient.isReady()
 
+  const isGraphConfigured = graphClient.isReady()
+  const isSearching = searchQuery !== debouncedSearch
+
+  // Debounce the search input
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery)
     }, 300)
     return () => clearTimeout(timer)
   }, [searchQuery])
+
+  // Sync search state when the URL ?q= param changes (e.g. navigating directly to /explore?q=X)
+  useEffect(() => {
+    const q = searchParams?.get('q') ?? ''
+    setSearchQuery(q)
+    setDebouncedSearch(q)
+  }, [searchParams])
+
+  // Keep URL in sync with the debounced search (enables shareable search links)
+  useEffect(() => {
+    const current = new URLSearchParams(window.location.search)
+    if (debouncedSearch) {
+      current.set('q', debouncedSearch)
+    } else {
+      current.delete('q')
+    }
+    const query = current.toString()
+    router.replace(`/explore${query ? `?${query}` : ''}`, { scroll: false })
+  }, [debouncedSearch])
 
   const orderBy = sort === 'price_low' ? 'price' : sort === 'price_high' ? 'price' : 'createdAt'
   const orderDirection = sort === 'price_low' ? 'asc' : sort === 'price_high' ? 'desc' : 'desc'
@@ -203,9 +227,15 @@ export default function ExplorePage() {
           )}
         </div>
 
-        {hasActiveFilters && !isLoading && isGraphConfigured && (
+        {searchQuery && isSearching && (
           <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Found {allListings.length} results</span>
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <span>Searching...</span>
+          </div>
+        )}
+        {hasActiveFilters && !isSearching && !isLoading && isGraphConfigured && (
+          <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Found {allListings.length} result{allListings.length !== 1 ? 's' : ''}</span>
           </div>
         )}
 

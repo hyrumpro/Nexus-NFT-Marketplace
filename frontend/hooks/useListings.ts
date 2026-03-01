@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi'
 import { Address, formatEther } from 'viem'
 import { graphClient } from '@/lib/graphql/client'
 import { queryKeys, cacheConfig } from '@/lib/graphql/keys'
+import { fetchNFTMetadata } from '@/lib/utils'
 import {
   GET_ALL_LISTINGS,
   GET_LISTINGS_BY_COLLECTION,
@@ -621,5 +622,19 @@ export function useNFTHistory(nftContract: Address | undefined, tokenId: bigint 
     },
     enabled: !!nftId && graphClient.isReady(),
     staleTime: cacheConfig.graph.staleTime,
+  })
+}
+
+// IPFS content is content-addressed (immutable), so metadata can be cached
+// aggressively. Using TanStack Query ensures the same tokenURI is only fetched
+// once per session even if multiple cards share it, and retries on failure.
+export function useNFTMetadata(tokenURI: string | undefined) {
+  return useQuery({
+    queryKey: ['nft-metadata', tokenURI ?? ''],
+    queryFn: () => fetchNFTMetadata(tokenURI!),
+    enabled: !!tokenURI,
+    staleTime: 24 * 60 * 60 * 1000, // 24 h — content never changes on IPFS
+    gcTime: 60 * 60 * 1000,          // keep in memory for 1 h after last use
+    retry: 3,
   })
 }

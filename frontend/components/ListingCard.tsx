@@ -5,8 +5,9 @@ import Link from 'next/link'
 import { Listing } from '@/types'
 import { formatEther } from 'viem'
 import { Clock, Zap } from 'lucide-react'
-import { useState, useEffect } from 'react'
-import { ipfsToHttp, fetchNFTMetadata, NFTMetadata } from '@/lib/utils'
+import { useState } from 'react'
+import { ipfsToHttp } from '@/lib/utils'
+import { useNFTMetadata } from '@/hooks/useListings'
 
 interface ListingCardProps {
   listing: Listing
@@ -15,17 +16,11 @@ interface ListingCardProps {
 export function ListingCard({ listing }: ListingCardProps) {
   const [imageError, setImageError] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [metadata, setMetadata] = useState<NFTMetadata | null>(null)
+  const { data: metadata } = useNFTMetadata(listing.nft?.tokenURI)
 
   const endTime = listing.endTime ? Number(listing.endTime) : null
   const isAuction = listing.listingType === 1
   const timeLeft = endTime ? Math.max(0, endTime - Math.floor(Date.now() / 1000)) : 0
-
-  useEffect(() => {
-    if (listing.nft?.tokenURI) {
-      fetchNFTMetadata(listing.nft.tokenURI).then(setMetadata)
-    }
-  }, [listing.nft?.tokenURI])
 
   const formatTimeLeft = (seconds: number) => {
     if (seconds <= 0) return 'Ended'

@@ -36,6 +36,14 @@ const nextConfig: NextConfig = {
       '@react-native-async-storage/async-storage': './lib/empty.ts',
     },
   },
+
+  // WalletConnect's ethereum-provider accesses indexedDB at module-init time,
+  // which crashes Next.js SSR. Marking these packages as externals prevents
+  // them from being bundled into the server-side render output.
+  webpack: (config) => {
+    config.externals.push('pino-pretty', 'lokijs', 'encoding')
+    return config
+  },
 }
 
 export default nextConfig

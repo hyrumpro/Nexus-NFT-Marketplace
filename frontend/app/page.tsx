@@ -7,6 +7,7 @@ import { formatEther } from 'viem'
 import { graphClient } from '@/lib/graphql/client'
 import { ArrowRight, Zap, Shield, Layers } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { PortfolioModal } from '@/components/PortfolioModal'
 
 export default function HomePage() {
   const { data: listings, isLoading, error } = useListings({ first: 8 })
@@ -15,6 +16,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
+      <PortfolioModal />
       {/* ── Hero ── */}
       <section className="relative overflow-hidden py-24 md:py-36">
         {/* Ambient orbs */}

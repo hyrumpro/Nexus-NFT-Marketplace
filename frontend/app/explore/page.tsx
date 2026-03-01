@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useInfiniteListings } from '@/hooks/useListings'
 import { ListingCard, ListingCardSkeleton } from '@/components/ListingCard'
@@ -13,6 +13,18 @@ type ViewMode = 'grid' | 'list'
 type ListingType = 'all' | 'fixed' | 'auction'
 
 export default function ExplorePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    }>
+      <ExplorePageInner />
+    </Suspense>
+  )
+}
+
+function ExplorePageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [sort, setSort] = useState<SortOption>('recent')

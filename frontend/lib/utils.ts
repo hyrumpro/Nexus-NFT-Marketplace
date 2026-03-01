@@ -1,4 +1,8 @@
-export const PINATA_GATEWAY = process.env.NEXT_PUBLIC_PINATA_GATEWAY || 'https://gateway.pinata.cloud'
+// gateway.pinata.cloud (public) sends Cross-Origin-Resource-Policy: same-origin,
+// blocking browser loads from other origins (e.g. Vercel). Use ipfs.io as the
+// default fallback — it allows cross-origin requests. If you have a dedicated
+// Pinata gateway (paid plan), set NEXT_PUBLIC_PINATA_GATEWAY=https://your-subdomain.mypinata.cloud
+export const PINATA_GATEWAY = process.env.NEXT_PUBLIC_PINATA_GATEWAY || 'https://ipfs.io'
 
 export function ipfsToHttp(uri: string | undefined): string {
   if (!uri) return ''

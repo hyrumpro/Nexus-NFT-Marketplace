@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { X, Github, MapPin, GraduationCap, Blocks, Database, Cpu, Globe } from 'lucide-react'
+import { X, Github, Linkedin, MapPin, GraduationCap, Blocks, Database, Cpu, Globe } from 'lucide-react'
 
 const STORAGE_KEY = 'portfolio_intro_seen'
 
@@ -25,7 +25,7 @@ const SKILL_GROUPS = [
   {
     label: 'Full Stack',
     icon: Globe,
-    skills: ['Next.js 14', 'TanStack Query', 'TypeScript', 'Tailwind CSS'],
+    skills: ['Next.js 16', 'TanStack Query', 'TypeScript', 'Tailwind CSS'],
   },
 ]
 
@@ -145,19 +145,28 @@ function PortfolioModalInner() {
               {/* Actions */}
               <div className="flex gap-3 mt-5">
                 <a
-                  href="https://github.com/HeyChriss"
+                  href="https://github.com/hyrumpro"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn-primary gap-2 flex-1 justify-center text-sm"
                 >
                   <Github className="w-4 h-4" />
-                  GitHub Profile
+                  GitHub
+                </a>
+                <a
+                  href="https://www.linkedin.com/in/hyrumdavid/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-outline gap-2 flex-1 justify-center text-sm"
+                >
+                  <Linkedin className="w-4 h-4" />
+                  LinkedIn
                 </a>
                 <button
                   onClick={handleClose}
-                  className="btn-outline text-sm px-5"
+                  className="btn-outline text-sm px-5 font-semibold"
                 >
-                  Explore Site
+                  OK
                 </button>
               </div>
 

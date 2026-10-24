@@ -7,7 +7,8 @@ import { useNFTContract } from '@/hooks/useNFTContract'
 import { useAccount } from 'wagmi'
 import Image from 'next/image'
 import { formatEther, Address } from 'viem'
-import { Clock, Share2, Loader2, ExternalLink, X, Tag } from 'lucide-react'
+import { Clock, Share2, Loader2, ExternalLink, X, Tag, Image as ImageIcon } from 'lucide-react'
+import { toast } from 'sonner'
 import { useState, useEffect, useRef } from 'react'
 import {
   useBuyNFT, useMakeOffer, useAcceptOffer, useCancelOffer, useCancelListing,
@@ -200,6 +201,7 @@ export default function NFTDetailPage() {
   const [metadata, setMetadata] = useState<NFTMetadata | null>(null)
   const [activeTab, setActiveTab] = useState<'details' | 'properties' | 'offers' | 'history'>('details')
   const [imageError, setImageError] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
   const [offerAmount, setOfferAmount] = useState('')
   const [bidAmount, setBidAmount] = useState('')
   const [newPrice, setNewPrice] = useState('')
@@ -268,7 +270,8 @@ export default function NFTDetailPage() {
   const isAuction       = !!currentAuction
   const isActiveListing = !!currentListing?.price && !isAuction
   const displayPrice    = isActiveListing ? formatEther(BigInt(currentListing!.price)) : null
-  const displayImage    = ipfsToHttp(metadata?.image || tokenURI)
+  // Only metadata's image is a media file — the tokenURI itself is a JSON document.
+  const displayImage    = metadata?.image ? ipfsToHttp(metadata.image) : ''
 
   // When listed, marketplace holds custody so on-chain owner ≠ seller wallet.
   // isSeller covers the case where the connected user is the active listing's seller.
@@ -365,8 +368,15 @@ export default function NFTDetailPage() {
 
   if (!nftData) {
     return (
-      <div className="container mx-auto px-4 py-8 text-center">
-        <p className="text-xl text-muted-foreground">NFT not found</p>
+      <div className="container mx-auto px-4 py-24 text-center">
+        <ImageIcon className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" strokeWidth={1.5} aria-hidden />
+        <p className="font-display text-xl font-semibold text-muted-foreground">NFT not found</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          It may not be indexed yet, or the link is incorrect.
+        </p>
+        <Link href="/explore" className="btn-primary mt-6 inline-flex">
+          Back to Explore
+        </Link>
       </div>
     )
   }
@@ -379,28 +389,45 @@ export default function NFTDetailPage() {
         <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
 
           {/* ── Left: Image ── */}
-          <div className="space-y-4">
-            <div className="relative aspect-square rounded-xl overflow-hidden bg-muted">
-              {!imageError && displayImage ? (
-                <Image
-                  src={displayImage}
-                  alt={metadata?.name || `NFT #${tokenId}`}
-                  fill
-                  className="object-cover"
-                  onError={() => setImageError(true)}
-                  unoptimized
-                />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10">
-                  <span className="text-6xl">🖼️</span>
-                </div>
-              )}
+          <div className="space-y-4 md:sticky md:top-24 md:self-start">
+            <div className="gradient-border relative rounded-2xl p-2">
+              <div className="relative aspect-square overflow-hidden rounded-xl bg-muted">
+                {displayImage && !imageError ? (
+                  <>
+                    <Image
+                      src={displayImage}
+                      alt={metadata?.name || `NFT #${tokenId}`}
+                      fill
+                      sizes="(min-width: 768px) 40vw, 100vw"
+                      className={`object-cover transition-opacity duration-500 ${
+                        imageLoaded ? 'opacity-100' : 'opacity-0'
+                      }`}
+                      onLoad={() => setImageLoaded(true)}
+                      onError={() => setImageError(true)}
+                      unoptimized
+                    />
+                    {!imageLoaded && (
+                      <div className="absolute inset-0 animate-shimmer bg-gradient-to-l from-transparent via-muted/50 to-transparent" />
+                    )}
+                  </>
+                ) : (
+                  <div
+                    className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10"
+                    aria-hidden
+                  >
+                    <ImageIcon className="w-16 h-16 text-muted-foreground/40" strokeWidth={1.25} />
+                  </div>
+                )}
+              </div>
             </div>
             <button
-              onClick={() => navigator.clipboard.writeText(window.location.href)}
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href)
+                toast.success('Link copied to clipboard')
+              }}
               className="btn-outline w-full gap-2"
             >
-              <Share2 className="w-4 h-4" />
+              <Share2 className="w-4 h-4" aria-hidden />
               Share
             </button>
           </div>
@@ -413,7 +440,7 @@ export default function NFTDetailPage() {
               <p className="text-sm text-muted-foreground">
                 {nftData.collection?.name || 'Unknown Collection'}
               </p>
-              <h1 className="text-3xl font-bold mt-1">
+              <h1 className="font-display text-3xl font-bold mt-1">
                 {metadata?.name || `#${tokenId.toString()}`}
               </h1>
               {metadata?.description && (
@@ -697,16 +724,15 @@ export default function NFTDetailPage() {
 
             {/* ── Tabs ── */}
             <div className="border-b">
-              <div className="flex">
+              <div className="flex" role="tablist" aria-label="NFT information">
                 {(['details', 'properties', 'offers', 'history'] as const).map((tab) => (
                   <button
                     key={tab}
+                    role="tab"
+                    aria-selected={activeTab === tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                      activeTab === tab
-                        ? 'border-primary text-foreground'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
+                    className="tab"
+                    data-active={activeTab === tab}
                   >
                     {tab.charAt(0).toUpperCase() + tab.slice(1)}
                     {tab === 'offers' && (() => {

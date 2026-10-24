@@ -16,7 +16,7 @@ export function Footer() {
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent rotate-45 group-hover:scale-110 transition-transform duration-200" />
                 <div className="absolute inset-0 w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent opacity-30 blur-md rotate-45" />
               </div>
-              <span className="text-xl font-bold gradient-text">NexusNFT</span>
+              <span className="font-display text-xl font-bold gradient-text">NexusNFT</span>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed">
               A decentralized NFT marketplace with low fees and true blockchain ownership.

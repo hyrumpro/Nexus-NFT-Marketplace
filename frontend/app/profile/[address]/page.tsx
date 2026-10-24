@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { useListings, useUserNFTs, useNFTsCreatedBy, useUserProfile, useUserCollections, useOffersReceived } from '@/hooks/useListings'
 import { useCancelOffer, useCancelListing } from '@/hooks/useTransactions'
 import { ipfsToHttp, fetchNFTMetadata, NFTMetadata, shortenAddress } from '@/lib/utils'
-import { ExternalLink, Loader2, AlertTriangle, Layers, Clock, RotateCcw } from 'lucide-react'
+import { ExternalLink, Loader2, AlertTriangle, Layers, Clock, RotateCcw, Image as ImageIcon } from 'lucide-react'
 import { graphClient } from '@/lib/graphql/client'
 
 export default function ProfilePage({ params }: { params: Promise<{ address: string }> }) {
@@ -49,57 +49,85 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
     <div className="min-h-screen">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <div className="flex items-start gap-6">
-            <div className="relative w-24 h-24 shrink-0">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-3xl font-bold text-primary-foreground">
-                {profileAddress.slice(2, 4).toUpperCase()}
-              </div>
-              <div className="absolute inset-0 w-24 h-24 rounded-full bg-gradient-to-br from-primary to-accent opacity-30 blur-md" />
-            </div>
-            <div className="flex-1">
-              <h1 className="text-2xl font-bold">
-                {isOwnProfile ? 'Your Profile' : 'User Profile'}
-              </h1>
-              <div className="flex items-center gap-2 mt-1">
-                <p className="font-mono text-muted-foreground">
-                  {shortenAddress(profileAddress, 6)}
-                </p>
-                <a
-                  href={`https://sepolia.etherscan.io/address/${profileAddress}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              </div>
-              
-              {userProfile && (
-                <div className="flex gap-6 mt-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Total Earned</p>
-                    <p className="font-semibold">{formatEther(BigInt(userProfile.totalEarned || 0))} ETH</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Total Spent</p>
-                    <p className="font-semibold">{formatEther(BigInt(userProfile.totalSpent || 0))} ETH</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">NFTs Owned</p>
-                    <p className="font-semibold">{userProfile.nftsOwned?.length || 0}</p>
-                  </div>
-                </div>
-              )}
-              
-              {isOwnProfile && (
-                <div className="flex gap-3 mt-4">
-                  <Link href="/create" className="btn-primary inline-flex">
-                    Create NFT
-                  </Link>
-                </div>
-              )}
-            </div>
+          {/* Banner */}
+          <div
+            className="relative h-28 overflow-hidden rounded-2xl border border-border/50 md:h-36"
+            aria-hidden
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/15 via-accent/10 to-primary/15" />
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage:
+                  'radial-gradient(hsl(var(--border) / 0.8) 1px, transparent 1px)',
+                backgroundSize: '24px 24px',
+                maskImage: 'linear-gradient(to bottom, black, transparent)',
+                WebkitMaskImage: 'linear-gradient(to bottom, black, transparent)',
+              }}
+            />
+            <div className="absolute -bottom-20 left-1/2 h-40 w-96 -translate-x-1/2 rounded-full bg-primary/15 blur-[70px]" />
           </div>
+
+          <div className="relative -mt-10 flex flex-col gap-4 px-1 sm:flex-row sm:items-end sm:justify-between md:-mt-12">
+            <div className="flex items-end gap-4">
+              <div className="relative h-20 w-20 shrink-0 rounded-full p-1 md:h-24 md:w-24">
+                <div className="flex h-full w-full items-center justify-center rounded-full border-4 border-background bg-gradient-to-br from-primary to-accent font-display text-2xl font-bold text-primary-foreground md:text-3xl">
+                  {profileAddress.slice(2, 4).toUpperCase()}
+                </div>
+                <div className="absolute inset-1 rounded-full bg-gradient-to-br from-primary to-accent opacity-30 blur-md" aria-hidden />
+              </div>
+              <div className="pb-1">
+                <h1 className="font-display text-2xl font-bold">
+                  {isOwnProfile ? 'Your Profile' : 'User Profile'}
+                </h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="font-mono text-sm text-muted-foreground">
+                    {shortenAddress(profileAddress, 6)}
+                  </p>
+                  <a
+                    href={`https://sepolia.etherscan.io/address/${profileAddress}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label="View on Etherscan"
+                  >
+                    <ExternalLink className="w-4 h-4" aria-hidden />
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {isOwnProfile && (
+              <div className="pb-1">
+                <Link href="/create" className="btn-primary inline-flex">
+                  Create NFT
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {userProfile && (
+            <div className="mt-6 grid grid-cols-3 gap-3 max-w-lg">
+              <div className="rounded-xl border border-border/50 bg-card/60 p-3 text-center">
+                <p className="font-display font-semibold tabular-nums gradient-text">
+                  {formatEther(BigInt(userProfile.totalEarned || 0))}
+                </p>
+                <p className="mt-0.5 text-[11px] uppercase tracking-wider text-muted-foreground">Earned (ETH)</p>
+              </div>
+              <div className="rounded-xl border border-border/50 bg-card/60 p-3 text-center">
+                <p className="font-display font-semibold tabular-nums gradient-text">
+                  {formatEther(BigInt(userProfile.totalSpent || 0))}
+                </p>
+                <p className="mt-0.5 text-[11px] uppercase tracking-wider text-muted-foreground">Spent (ETH)</p>
+              </div>
+              <div className="rounded-xl border border-border/50 bg-card/60 p-3 text-center">
+                <p className="font-display font-semibold tabular-nums gradient-text">
+                  {userProfile.nftsOwned?.length || 0}
+                </p>
+                <p className="mt-0.5 text-[11px] uppercase tracking-wider text-muted-foreground">NFTs Owned</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {!isGraphConfigured && (
@@ -112,8 +140,8 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
           </div>
         )}
 
-        <div className="border-b mb-8">
-          <div className="flex gap-8">
+        <div className="border-b mb-8 -mx-4 px-4 overflow-x-auto">
+          <div className="flex min-w-max" role="tablist" aria-label="Profile sections">
             {[
               { id: 'portfolio', label: 'Portfolio', count: portfolioNFTs?.length },
               { id: 'collections', label: 'Collections', count: userCollections?.length },
@@ -126,12 +154,11 @@ export default function ProfilePage({ params }: { params: Promise<{ address: str
             ].map((tab) => (
               <button
                 key={tab.id}
+                role="tab"
+                aria-selected={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`pb-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                  activeTab === tab.id
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                className="tab"
+                data-active={activeTab === tab.id}
               >
                 {tab.label}
                 {tab.count !== undefined && (
@@ -456,26 +483,28 @@ function NFTCard({ nft }: { nft: any }) {
     }
   }, [nft.tokenURI])
 
-  const displayImage = ipfsToHttp(metadata?.image || nft.tokenURI)
+  // Only metadata's image is a media file — the tokenURI itself is a JSON document.
+  const displayImage = metadata?.image ? ipfsToHttp(metadata.image) : ''
   const displayName = metadata?.name || `#${nft.tokenId?.toString()}`
   const collectionAddress = nft.collection?.address || nft.nftContract
 
   return (
     <Link href={`/nft/${collectionAddress}/${nft.tokenId}`} className="group">
-      <div className="card overflow-hidden transition-all duration-300 hover:shadow-lg">
+      <div className="card card-hover overflow-hidden">
         <div className="relative aspect-square overflow-hidden bg-muted">
-          {!imageError && displayImage ? (
+          {displayImage && !imageError ? (
             <Image
               src={displayImage}
               alt={displayName}
               fill
+              sizes="(min-width: 1280px) 25vw, (min-width: 640px) 33vw, 100vw"
               className="object-cover transition-transform duration-300 group-hover:scale-105"
               onError={() => setImageError(true)}
               unoptimized
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10">
-              <span className="text-4xl">🖼️</span>
+            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10" aria-hidden>
+              <ImageIcon className="w-8 h-8 text-muted-foreground/40" strokeWidth={1.5} />
             </div>
           )}
         </div>
@@ -483,9 +512,9 @@ function NFTCard({ nft }: { nft: any }) {
           <p className="text-xs text-muted-foreground truncate">
             {nft.collection?.name || 'Unknown'}
           </p>
-          <h3 className="font-semibold truncate">{displayName}</h3>
+          <h3 className="font-display font-semibold truncate">{displayName}</h3>
           {nft.currentListing?.price && (
-            <p className="text-sm text-primary font-medium mt-1">
+            <p className="text-sm text-primary font-medium mt-1 tabular-nums">
               {formatEther(BigInt(nft.currentListing.price))} ETH
             </p>
           )}
@@ -605,7 +634,7 @@ function ProfileListingRow({
     }
   }, [listing.nft?.tokenURI])
 
-  const displayImage = ipfsToHttp(metadata?.image || listing.nft?.tokenURI)
+  const displayImage = metadata?.image ? ipfsToHttp(metadata.image) : ''
   const displayName = metadata?.name || `#${listing.tokenId?.toString()}`
   const collectionName = listing.nft?.collection?.name || 'Unknown Collection'
   const nftHref = `/nft/${listing.nftContract}/${listing.tokenId}`
@@ -620,13 +649,14 @@ function ProfileListingRow({
               src={displayImage}
               alt={displayName}
               fill
+              sizes="56px"
               className="object-cover"
               onError={() => setImageError(true)}
               unoptimized
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10">
-              <span className="text-lg opacity-30 select-none">◈</span>
+            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10" aria-hidden>
+              <ImageIcon className="w-5 h-5 text-muted-foreground/40" strokeWidth={1.5} />
             </div>
           )}
         </div>

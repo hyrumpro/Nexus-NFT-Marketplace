@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId, useReadContract } from 'wagmi'
 import { parseEther, isAddress, Address } from 'viem'
-import { Upload, ImageIcon, Loader2, Plus, Trash2, Hash } from 'lucide-react'
+import { Upload, Loader2, Plus, Trash2, Hash, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchParams } from 'next/navigation'
 import Image from 'next/image'
@@ -11,7 +11,6 @@ import { ConnectButton } from '@/components/ConnectButton'
 import { useUserCollections } from '@/hooks/useListings'
 import { NFT_COLLECTION_ABI, NFT_COLLECTION_FACTORY_ABI } from '@/contracts/abis'
 import { contractAddresses } from '@/config/contracts'
-import { ipfsToHttp, fetchNFTMetadata, NFTMetadata } from '@/lib/utils'
 
 type CreateMode = 'mint' | 'collection'
 
@@ -126,6 +125,16 @@ function CreatePageInner() {
   const { data: userCollections, isLoading: collectionsLoading } = useUserCollections(address)
   const [selectedCollectionData, setSelectedCollectionData] = useState<any>(null)
   const [mintImage, setMintImage] = useState<File | null>(null)
+  const [mintImagePreview, setMintImagePreview] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+
+  // Object URL for the local image preview (revoked on change/unmount)
+  useEffect(() => {
+    if (!mintImage) { setMintImagePreview(null); return }
+    const url = URL.createObjectURL(mintImage)
+    setMintImagePreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [mintImage])
   const [mintName, setMintName] = useState('')
   const [mintDescription, setMintDescription] = useState('')
   const [mintCollection, setMintCollection] = useState('')
@@ -255,19 +264,18 @@ function CreatePageInner() {
           Mint new NFTs or create a new collection
         </p>
 
-        <div className="flex gap-2 mb-8 flex-wrap">
+        <div className="segmented mb-8" role="tablist" aria-label="Create mode">
           {[
             { id: 'mint' as const, label: 'Mint New NFT' },
             { id: 'collection' as const, label: 'Create Collection' },
           ].map((tab) => (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={mode === tab.id}
+              data-active={mode === tab.id}
               onClick={() => setMode(tab.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                mode === tab.id
-                  ? 'bg-primary text-primary-foreground shadow-[0_0_16px_hsl(var(--primary)/0.3)]'
-                  : 'border border-border/50 bg-muted/20 hover:bg-muted/50 hover:border-border'
-              }`}
+              className="segmented-item"
             >
               {tab.label}
             </button>
@@ -280,29 +288,66 @@ function CreatePageInner() {
             <h2 className="text-xl font-semibold mb-6">Mint New NFT</h2>
             <div className="grid md:grid-cols-2 gap-8">
               <div>
-                <label className="block text-sm font-medium mb-2">Image *</label>
-                <div className="aspect-square border-2 border-dashed border-border/50 rounded-xl flex items-center justify-center cursor-pointer hover:border-primary/60 hover:bg-primary/3 transition-all duration-200">
+                <label className="field-label">Image *</label>
+                <div
+                  className={`relative aspect-square rounded-xl border-2 border-dashed transition-all duration-200 ${
+                    isDragging
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border/50 hover:border-primary/60 hover:bg-muted/30'
+                  }`}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setIsDragging(false)
+                    const file = e.dataTransfer.files?.[0]
+                    if (file && file.type.startsWith('image/')) setMintImage(file)
+                  }}
+                >
                   <input
                     type="file"
                     accept="image/*"
                     onChange={(e) => setMintImage(e.target.files?.[0] ?? null)}
-                    className="hidden"
+                    className="sr-only"
                     id="image-upload"
+                    aria-label="Upload NFT image"
                   />
-                  <label htmlFor="image-upload" className="cursor-pointer w-full h-full flex items-center justify-center">
-                    {mintImage ? (
-                      <div className="text-center p-4">
-                        <ImageIcon className="w-12 h-12 mx-auto mb-2 text-primary" />
-                        <p className="text-sm font-medium">{mintImage.name}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {(mintImage.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
+                  <label htmlFor="image-upload" className="block w-full h-full cursor-pointer">
+                    {mintImagePreview ? (
+                      <div className="relative w-full h-full">
+                        <Image
+                          src={mintImagePreview}
+                          alt="Selected NFT preview"
+                          fill
+                          sizes="(min-width: 768px) 320px, 100vw"
+                          className="rounded-xl object-cover"
+                          unoptimized
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); setMintImage(null) }}
+                          aria-label="Remove image"
+                          className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground backdrop-blur-sm transition-colors hover:text-destructive hover:border-destructive/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/90 to-transparent p-3 pt-8">
+                          <p className="truncate text-sm font-medium">{mintImage?.name}</p>
+                          <p className="text-xs text-muted-foreground tabular-nums">
+                            {((mintImage?.size ?? 0) / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
                       </div>
                     ) : (
-                      <div className="text-center">
-                        <Upload className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">Click to upload</p>
-                        <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF up to 10MB</p>
+                      <div className="flex w-full h-full items-center justify-center">
+                        <div className="text-center px-4">
+                          <Upload className="w-10 h-10 mx-auto mb-3 text-muted-foreground/70" strokeWidth={1.5} aria-hidden />
+                          <p className="text-sm text-foreground/90">
+                            <span className="font-medium text-primary">Click to upload</span>
+                            {' '}or drag &amp; drop
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF up to 10MB</p>
+                        </div>
                       </div>
                     )}
                   </label>

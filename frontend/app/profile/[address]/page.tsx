@@ -3,11 +3,11 @@
 import { use, useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { Address, formatEther } from 'viem'
-import Image from 'next/image'
 import Link from 'next/link'
 import { useListings, useUserNFTs, useNFTsCreatedBy, useUserProfile, useUserCollections, useOffersReceived } from '@/hooks/useListings'
 import { useCancelOffer, useCancelListing } from '@/hooks/useTransactions'
 import { ipfsToHttp, fetchNFTMetadata, NFTMetadata, shortenAddress } from '@/lib/utils'
+import { NftImage } from '@/components/NftImage'
 import { ExternalLink, Loader2, AlertTriangle, Layers, Clock, RotateCcw, Image as ImageIcon } from 'lucide-react'
 import { graphClient } from '@/lib/graphql/client'
 
@@ -475,7 +475,6 @@ function NFTGrid({ nfts, isLoading, isError, emptyMessage, isOwnProfile }: {
 
 function NFTCard({ nft }: { nft: any }) {
   const [metadata, setMetadata] = useState<NFTMetadata | null>(null)
-  const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
     if (nft.tokenURI) {
@@ -492,21 +491,17 @@ function NFTCard({ nft }: { nft: any }) {
     <Link href={`/nft/${collectionAddress}/${nft.tokenId}`} className="group">
       <div className="card card-hover overflow-hidden">
         <div className="relative aspect-square overflow-hidden bg-muted">
-          {displayImage && !imageError ? (
-            <Image
-              src={displayImage}
-              alt={displayName}
-              fill
-              sizes="(min-width: 1280px) 25vw, (min-width: 640px) 33vw, 100vw"
-              className="object-cover transition-transform duration-300 group-hover:scale-105"
-              onError={() => setImageError(true)}
-              unoptimized
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10" aria-hidden>
-              <ImageIcon className="w-8 h-8 text-muted-foreground/40" strokeWidth={1.5} />
-            </div>
-          )}
+          <NftImage
+            src={displayImage}
+            alt={displayName}
+            sizes="(min-width: 1280px) 25vw, (min-width: 640px) 33vw, 100vw"
+            className="transition-transform duration-300 group-hover:scale-105"
+            fallback={
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10" aria-hidden>
+                <ImageIcon className="w-8 h-8 text-muted-foreground/40" strokeWidth={1.5} />
+              </div>
+            }
+          />
         </div>
         <div className="p-4">
           <p className="text-xs text-muted-foreground truncate">
@@ -626,7 +621,6 @@ function ProfileListingRow({
   isCancelling: boolean
 }) {
   const [metadata, setMetadata] = useState<NFTMetadata | null>(null)
-  const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
     if (listing.nft?.tokenURI) {
@@ -644,21 +638,16 @@ function ProfileListingRow({
       {/* Thumbnail */}
       <Link href={nftHref} className="flex-shrink-0">
         <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-muted border border-border/50">
-          {!imageError && displayImage ? (
-            <Image
-              src={displayImage}
-              alt={displayName}
-              fill
-              sizes="56px"
-              className="object-cover"
-              onError={() => setImageError(true)}
-              unoptimized
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10" aria-hidden>
-              <ImageIcon className="w-5 h-5 text-muted-foreground/40" strokeWidth={1.5} />
-            </div>
-          )}
+          <NftImage
+            src={displayImage}
+            alt={displayName}
+            sizes="56px"
+            fallback={
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10" aria-hidden>
+                <ImageIcon className="w-5 h-5 text-muted-foreground/40" strokeWidth={1.5} />
+              </div>
+            }
+          />
         </div>
       </Link>
 

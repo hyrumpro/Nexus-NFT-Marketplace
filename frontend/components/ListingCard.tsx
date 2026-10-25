@@ -1,21 +1,18 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { Listing } from '@/types'
 import { formatEther } from 'viem'
 import { Clock, Zap, ImageIcon } from 'lucide-react'
-import { useState } from 'react'
 import { ipfsToHttp } from '@/lib/utils'
 import { useNFTMetadata } from '@/hooks/useListings'
+import { NftImage } from '@/components/NftImage'
 
 interface ListingCardProps {
   listing: Listing
 }
 
 export function ListingCard({ listing }: ListingCardProps) {
-  const [imageLoaded, setImageLoaded] = useState(false)
-  const [imageError, setImageError] = useState(false)
   const { data: metadata } = useNFTMetadata(listing.nft?.tokenURI)
 
   const endTime = listing.endTime ? Number(listing.endTime) : null
@@ -49,25 +46,20 @@ export function ListingCard({ listing }: ListingCardProps) {
 
         {/* Media */}
         <div className="relative aspect-square overflow-hidden bg-muted">
-          {displayImage && !imageError ? (
-            <>
-              <Image
-                src={displayImage}
-                alt={displayName}
-                fill
-                sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                className={`object-cover transition-[transform,opacity] duration-500 group-hover:scale-[1.06] ${
-                  imageLoaded ? 'opacity-100' : 'opacity-0'
-                }`}
-                onLoad={() => setImageLoaded(true)}
-                onError={() => setImageError(true)}
-                unoptimized
-              />
-              {/* Shimmer while the image streams in */}
-              {!imageLoaded && (
-                <div className="absolute inset-0 animate-shimmer bg-gradient-to-l from-transparent via-muted/50 to-transparent" />
-              )}
-            </>
+          {displayImage ? (
+            <NftImage
+              src={displayImage}
+              alt={displayName}
+              sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+              fallback={
+                <div
+                  className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10"
+                  aria-hidden
+                >
+                  <ImageIcon className="w-10 h-10 text-muted-foreground/40" strokeWidth={1.5} />
+                </div>
+              }
+            />
           ) : (
             <div
               className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10"
@@ -100,11 +92,7 @@ export function ListingCard({ listing }: ListingCardProps) {
           )}
 
           {/* Hover overlay with CTA */}
-          <div
-            className={`absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent transition-opacity duration-300 ${
-              imageLoaded ? 'opacity-0 group-hover:opacity-100' : 'opacity-0'
-            }`}
-          >
+          <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100">
             <div className="absolute bottom-3 left-3 right-3">
               <span className="btn-primary w-full rounded-lg py-2 text-center text-xs">
                 View Details

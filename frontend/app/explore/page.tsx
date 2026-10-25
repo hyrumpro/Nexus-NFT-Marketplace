@@ -2,8 +2,9 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useInfiniteListings } from '@/hooks/useListings'
+import { useInfiniteListings, useNFTMetadata } from '@/hooks/useListings'
 import { ListingCard, ListingCardSkeleton } from '@/components/ListingCard'
+import { NftImage } from '@/components/NftImage'
 import { useInView } from 'react-intersection-observer'
 import {
   Search,
@@ -21,11 +22,9 @@ import {
   Image as ImageIcon,
 } from 'lucide-react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { formatEther } from 'viem'
 import { graphClient } from '@/lib/graphql/client'
 import { ipfsToHttp } from '@/lib/utils'
-import { useNFTMetadata } from '@/hooks/useListings'
 import type { Listing } from '@/types'
 
 type SortOption = 'recent' | 'price_low' | 'price_high'
@@ -388,7 +387,6 @@ function ExplorePageInner() {
 /** Compact horizontal row — list view */
 function ListingRow({ listing }: { listing: Listing }) {
   const { data: metadata } = useNFTMetadata(listing.nft?.tokenURI)
-  const [imageError, setImageError] = useState(false)
 
   const isAuction = listing.listingType === 1
   const displayImage = metadata?.image ? ipfsToHttp(metadata.image) : ''
@@ -404,21 +402,17 @@ function ListingRow({ listing }: { listing: Listing }) {
     >
       {/* Thumbnail */}
       <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20">
-        {displayImage && !imageError ? (
-          <Image
-            src={displayImage}
-            alt={displayName}
-            fill
-            sizes="80px"
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-            onError={() => setImageError(true)}
-            unoptimized
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10" aria-hidden>
-            <ImageIcon className="h-6 w-6 text-muted-foreground/40" strokeWidth={1.5} />
-          </div>
-        )}
+        <NftImage
+          src={displayImage}
+          alt={displayName}
+          sizes="80px"
+          className="transition-transform duration-300 group-hover:scale-105"
+          fallback={
+            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10" aria-hidden>
+              <ImageIcon className="h-6 w-6 text-muted-foreground/40" strokeWidth={1.5} />
+            </div>
+          }
+        />
       </div>
 
       {/* Info */}

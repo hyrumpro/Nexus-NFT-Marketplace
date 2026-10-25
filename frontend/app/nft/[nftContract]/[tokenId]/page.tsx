@@ -5,10 +5,10 @@ import Link from 'next/link'
 import { useNFTDetail, useOffers, useNFTHistory } from '@/hooks/useListings'
 import { useNFTContract } from '@/hooks/useNFTContract'
 import { useAccount } from 'wagmi'
-import Image from 'next/image'
 import { formatEther, Address } from 'viem'
-import { Clock, Share2, Loader2, ExternalLink, X, Tag, Image as ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
+import { NftImage } from '@/components/NftImage'
+import { Clock, Share2, Loader2, ExternalLink, X, Tag, Image as ImageIcon } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import {
   useBuyNFT, useMakeOffer, useAcceptOffer, useCancelOffer, useCancelListing,
@@ -200,8 +200,6 @@ export default function NFTDetailPage() {
 
   const [metadata, setMetadata] = useState<NFTMetadata | null>(null)
   const [activeTab, setActiveTab] = useState<'details' | 'properties' | 'offers' | 'history'>('details')
-  const [imageError, setImageError] = useState(false)
-  const [imageLoaded, setImageLoaded] = useState(false)
   const [offerAmount, setOfferAmount] = useState('')
   const [bidAmount, setBidAmount] = useState('')
   const [newPrice, setNewPrice] = useState('')
@@ -392,32 +390,19 @@ export default function NFTDetailPage() {
           <div className="space-y-4 md:sticky md:top-24 md:self-start">
             <div className="gradient-border relative rounded-2xl p-2">
               <div className="relative aspect-square overflow-hidden rounded-xl bg-muted">
-                {displayImage && !imageError ? (
-                  <>
-                    <Image
-                      src={displayImage}
-                      alt={metadata?.name || `NFT #${tokenId}`}
-                      fill
-                      sizes="(min-width: 768px) 40vw, 100vw"
-                      className={`object-cover transition-opacity duration-500 ${
-                        imageLoaded ? 'opacity-100' : 'opacity-0'
-                      }`}
-                      onLoad={() => setImageLoaded(true)}
-                      onError={() => setImageError(true)}
-                      unoptimized
-                    />
-                    {!imageLoaded && (
-                      <div className="absolute inset-0 animate-shimmer bg-gradient-to-l from-transparent via-muted/50 to-transparent" />
-                    )}
-                  </>
-                ) : (
-                  <div
-                    className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10"
-                    aria-hidden
-                  >
-                    <ImageIcon className="w-16 h-16 text-muted-foreground/40" strokeWidth={1.25} />
-                  </div>
-                )}
+                <NftImage
+                  src={displayImage}
+                  alt={metadata?.name || `NFT #${tokenId}`}
+                  sizes="(min-width: 768px) 40vw, 100vw"
+                  fallback={
+                    <div
+                      className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10"
+                      aria-hidden
+                    >
+                      <ImageIcon className="w-16 h-16 text-muted-foreground/40" strokeWidth={1.25} />
+                    </div>
+                  }
+                />
               </div>
             </div>
             <button

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { X, Github, Linkedin, MapPin, GraduationCap, Blocks, Database, Cpu, Globe } from 'lucide-react'
+import { X, Github, Linkedin, GraduationCap, Blocks, Database, Cpu, Globe } from 'lucide-react'
 
 const STORAGE_KEY = 'portfolio_intro_seen'
 
@@ -92,10 +92,6 @@ function PortfolioModalInner() {
 
             {/* Meta */}
             <div className="px-6 pb-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <MapPin className="w-3 h-3 text-primary shrink-0" />
-                Área metropolitana de Trujillo
-              </span>
               <span className="flex items-center gap-1.5">
                 <GraduationCap className="w-3 h-3 text-primary shrink-0" />
                 Brigham Young University – Idaho

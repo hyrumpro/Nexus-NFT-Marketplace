@@ -8,6 +8,7 @@ import { useAccount } from 'wagmi'
 import { formatEther, Address } from 'viem'
 import { toast } from 'sonner'
 import { NftImage } from '@/components/NftImage'
+import { CountdownTimer } from '@/components/CountdownTimer'
 import { Clock, Share2, Loader2, ExternalLink, X, Tag, Image as ImageIcon } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import {
@@ -471,9 +472,13 @@ export default function NFTDetailPage() {
                     <span className="text-muted-foreground">ETH</span>
                   </div>
                   {!auctionEnded && currentAuction?.endTime && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      Ends in {formatTimeLeft(Number(currentAuction.endTime) - Math.floor(Date.now() / 1000))}
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Clock className="w-3 h-3" aria-hidden />
+                      Ends in{' '}
+                      <CountdownTimer
+                        to={Number(currentAuction.endTime)}
+                        className="font-medium text-primary tabular-nums"
+                      />
                     </p>
                   )}
                   {auctionEnded && <p className="text-xs text-amber-500 font-medium">Auction ended</p>}

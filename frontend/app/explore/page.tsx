@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useInfiniteListings, useNFTMetadata } from '@/hooks/useListings'
 import { ListingCard, ListingCardSkeleton } from '@/components/ListingCard'
 import { NftImage } from '@/components/NftImage'
+import { Stagger, StaggerItem } from '@/components/Reveal'
 import { useInView } from 'react-intersection-observer'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search,
   Filter,
@@ -154,8 +156,8 @@ function ExplorePageInner() {
           </p>
         </div>
 
-        {/* Toolbar */}
-        <div className="mb-6 flex flex-col gap-4">
+        {/* Toolbar — sticky under the navbar on desktop and mobile */}
+        <div className="sticky top-16 z-30 -mx-4 mb-6 border-b border-border/30 bg-background/85 px-4 py-3 backdrop-blur-xl">
           <div className="flex flex-col gap-4 lg:flex-row">
             {/* Search */}
             <div className="relative flex-1">
@@ -244,9 +246,9 @@ function ExplorePageInner() {
             </div>
           </div>
 
-          {/* Price filter panel */}
+          {/* Price filter panel — inline on desktop */}
           {showFilters && (
-            <div className="card p-4">
+            <div className="card hidden p-4 md:block">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="font-display font-semibold">Filters</h3>
                 {hasActiveFilters && (
@@ -285,6 +287,80 @@ function ExplorePageInner() {
             </div>
           )}
         </div>
+
+        {/* Price filter — bottom sheet on mobile */}
+        <AnimatePresence>
+          {showFilters && (
+            <>
+              <motion.div
+                key="filter-backdrop"
+                className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm md:hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowFilters(false)}
+              />
+              <motion.div
+                key="filter-sheet"
+                role="dialog"
+                aria-label="Price filters"
+                className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-border/60 bg-card p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-[0_-16px_48px_rgba(0,0,0,0.5)] md:hidden"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="font-display font-semibold">Filters</h3>
+                  <button
+                    onClick={() => setShowFilters(false)}
+                    aria-label="Close filters"
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="field-label text-muted-foreground">Price Range (ETH)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        aria-label="Minimum price in ETH"
+                        placeholder="Min"
+                        value={minPrice}
+                        onChange={(e) => setMinPrice(e.target.value)}
+                        className="input text-sm"
+                        step="0.01"
+                        min="0"
+                      />
+                      <input
+                        type="number"
+                        aria-label="Maximum price in ETH"
+                        placeholder="Max"
+                        value={maxPrice}
+                        onChange={(e) => setMaxPrice(e.target.value)}
+                        className="input text-sm"
+                        step="0.01"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {hasActiveFilters && (
+                      <button onClick={clearFilters} className="btn-outline flex-1">
+                        Clear all
+                      </button>
+                    )}
+                    <button onClick={() => setShowFilters(false)} className="btn-primary flex-1">
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
 
         {/* Result meta */}
         {searchQuery && isSearching && (
@@ -332,7 +408,7 @@ function ExplorePageInner() {
 
         {/* Results */}
         {isLoading && isGraphConfigured ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 12 }).map((_, i) => (
               <ListingCardSkeleton key={i} />
             ))}
@@ -340,11 +416,13 @@ function ExplorePageInner() {
         ) : allListings.length > 0 ? (
           <>
             {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <Stagger className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4">
                 {allListings.map((listing) => (
-                  <ListingCard key={listing.id} listing={listing} />
+                  <StaggerItem key={listing.id}>
+                    <ListingCard listing={listing} />
+                  </StaggerItem>
                 ))}
-              </div>
+              </Stagger>
             ) : (
               <div className="space-y-3">
                 {allListings.map((listing) => (

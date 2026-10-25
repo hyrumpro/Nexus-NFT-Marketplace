@@ -83,11 +83,21 @@
       scroll-behavior: auto;
     }
   }
+  /* Mobile polish: no gray tap flash, no double-tap zoom delay on controls */
+  button,
+  [role='button'],
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-primary text-primary-foreground inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50;
+    @apply bg-primary text-primary-foreground inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98];
     box-shadow: 0 0 20px hsl(var(--primary) / 0.25);
   }
 
@@ -101,7 +111,7 @@
   }
 
   .btn-outline {
-    @apply border border-border/70 bg-transparent hover:bg-muted/50 hover:border-primary/40 hover:text-primary inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50;
+    @apply border border-border/70 bg-transparent hover:bg-muted/50 hover:border-primary/40 hover:text-primary inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98];
   }
 
   .btn-ghost {
@@ -166,6 +176,30 @@
   .skeleton {
     @apply animate-pulse rounded-lg bg-muted;
   }
+
+  /* Mouse-tracking radial glow — parent sets --x/--y (percentages) */
+  .spotlight {
+    position: relative;
+  }
+  .spotlight::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+      480px circle at var(--x, 50%) var(--y, 50%),
+      hsl(var(--primary) / 0.09),
+      transparent 45%
+    );
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .group:hover .spotlight::after,
+  .spotlight:hover::after {
+    opacity: 1;
+  }
 }
 
 @layer utilities {
@@ -212,6 +246,50 @@
 
   .text-glow-primary {
     text-shadow: 0 0 20px hsl(var(--primary) / 0.6);
+  }
+
+  /* Infinite horizontal marquee — inner row must contain 2 copies of content */
+  .animate-marquee {
+    animation: marquee var(--marquee-duration, 32s) linear infinite;
+  }
+  .marquee-hover:hover .animate-marquee {
+    animation-play-state: paused;
+  }
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  /* Fade the horizontal edges of a strip (marquee) */
+  .mask-fade-x {
+    mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+  }
+
+  /* Notch / gesture-bar aware padding */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pb-safe-lg {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Route-change entrance (app/template.tsx) — opacity only, never transform,
+     so position:fixed descendants keep working */
+  .page-enter {
+    animation: page-enter 0.3s ease-out both;
+  }
+  @keyframes page-enter {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 }
 

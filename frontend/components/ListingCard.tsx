@@ -3,10 +3,13 @@
 import Link from 'next/link'
 import { Listing } from '@/types'
 import { formatEther } from 'viem'
+import { motion, useMotionValue, useSpring, useReducedMotion } from 'framer-motion'
 import { Clock, Zap, ImageIcon } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { ipfsToHttp } from '@/lib/utils'
 import { useNFTMetadata } from '@/hooks/useListings'
 import { NftImage } from '@/components/NftImage'
+import { CountdownTimer } from '@/components/CountdownTimer'
 
 interface ListingCardProps {
   listing: Listing
@@ -14,18 +17,40 @@ interface ListingCardProps {
 
 export function ListingCard({ listing }: ListingCardProps) {
   const { data: metadata } = useNFTMetadata(listing.nft?.tokenURI)
+  const reduceMotion = useReducedMotion()
+
+  // Tilt + spotlight only make sense with a fine pointer (mouse) and motion
+  const [finePointer, setFinePointer] = useState(false)
+  useEffect(() => {
+    setFinePointer(window.matchMedia('(pointer: fine)').matches)
+  }, [])
+
+  const rawRx = useMotionValue(0)
+  const rawRy = useMotionValue(0)
+  const rotateX = useSpring(rawRx, { stiffness: 160, damping: 18, mass: 0.4 })
+  const rotateY = useSpring(rawRy, { stiffness: 160, damping: 18, mass: 0.4 })
+
+  const interactive = finePointer && !reduceMotion
+
+  const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!interactive) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const px = (e.clientX - rect.left) / rect.width - 0.5
+    const py = (e.clientY - rect.top) / rect.height - 0.5
+    rawRy.set(px * 7)
+    rawRx.set(-py * 7)
+    e.currentTarget.style.setProperty('--x', `${(px + 0.5) * 100}%`)
+    e.currentTarget.style.setProperty('--y', `${(py + 0.5) * 100}%`)
+  }
+
+  const onMouseLeave = () => {
+    rawRx.set(0)
+    rawRy.set(0)
+  }
 
   const endTime = listing.endTime ? Number(listing.endTime) : null
   const isAuction = listing.listingType === 1
-  const timeLeft = endTime ? Math.max(0, endTime - Math.floor(Date.now() / 1000)) : 0
-
-  const formatTimeLeft = (seconds: number) => {
-    if (seconds <= 0) return 'Ended'
-    const hours = Math.floor(seconds / 3600)
-    const days = Math.floor(hours / 24)
-    if (days > 0) return `${days}d ${hours % 24}h`
-    return `${hours}h ${Math.floor((seconds % 3600) / 60)}m`
-  }
+  const expired = endTime !== null && endTime <= Math.floor(Date.now() / 1000)
 
   // Only metadata's image is an actual media file — the tokenURI itself is a
   // JSON document, so it must never be used as an image source.
@@ -40,7 +65,12 @@ export function ListingCard({ listing }: ListingCardProps) {
       className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       aria-label={`${displayName} from ${collectionName} — ${price} ETH`}
     >
-      <div className="card-hover relative overflow-hidden rounded-xl border border-border/50 bg-card shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
+      <motion.div
+        className="card-hover spotlight relative overflow-hidden rounded-xl border border-border/50 bg-card shadow-[0_4px_20px_rgba(0,0,0,0.3)] will-change-transform"
+        style={interactive ? { rotateX, rotateY, transformPerspective: 900 } : undefined}
+        onMouseMove={onMouseMove}
+        onMouseLeave={onMouseLeave}
+      >
         {/* Gradient hairline on hover */}
         <div className="absolute top-0 left-0 right-0 z-10 h-px bg-gradient-to-r from-transparent via-primary to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
@@ -50,7 +80,7 @@ export function ListingCard({ listing }: ListingCardProps) {
             <NftImage
               src={displayImage}
               alt={displayName}
-              sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+              sizes="(min-width: 1280px) 25vw, (min-width: 640px) 33vw, 50vw"
               fallback={
                 <div
                   className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10"
@@ -77,14 +107,14 @@ export function ListingCard({ listing }: ListingCardProps) {
             </div>
           )}
 
-          {/* Time-left badge — shown for any listing with an expiry */}
-          {endTime && timeLeft > 0 && (
+          {/* Time-left badge — live ticking countdown */}
+          {endTime !== null && !expired && (
             <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md border border-border/50 bg-background/80 px-2 py-1 text-xs font-medium backdrop-blur-sm">
               <Clock className="w-3 h-3 text-primary" aria-hidden />
-              <span className="text-primary tabular-nums">{formatTimeLeft(timeLeft)}</span>
+              <CountdownTimer to={endTime} className="text-primary" />
             </div>
           )}
-          {endTime && timeLeft === 0 && (
+          {endTime !== null && expired && (
             <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md border border-destructive/30 bg-destructive/20 px-2 py-1 text-xs font-medium text-destructive backdrop-blur-sm">
               <Clock className="w-3 h-3" aria-hidden />
               Expired
@@ -102,7 +132,7 @@ export function ListingCard({ listing }: ListingCardProps) {
         </div>
 
         {/* Body */}
-        <div className="p-4">
+        <div className="p-3.5 sm:p-4">
           <div className="mb-1.5 flex items-center gap-2">
             <span
               className="h-5 w-5 shrink-0 rounded-full border border-border/50 bg-gradient-to-br from-primary/70 to-accent/70"
@@ -115,7 +145,7 @@ export function ListingCard({ listing }: ListingCardProps) {
           </h3>
 
           <div className="mt-3 flex items-end justify-between border-t border-border/40 pt-3">
-            <div>
+            <div className="min-w-0">
               <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
                 {isAuction ? 'Current Bid' : 'Price'}
               </p>
@@ -124,12 +154,15 @@ export function ListingCard({ listing }: ListingCardProps) {
                 <span className="ml-1 text-xs font-normal text-muted-foreground">ETH</span>
               </p>
             </div>
-            {endTime && timeLeft > 0 && (
-              <span className="chip !py-0.5 tabular-nums">{formatTimeLeft(timeLeft)}</span>
+            {endTime !== null && !expired && (
+              <CountdownTimer
+                to={endTime}
+                className="chip !py-0.5 tabular-nums transition-opacity duration-200 group-hover:opacity-0"
+              />
             )}
           </div>
         </div>
-      </div>
+      </motion.div>
     </Link>
   )
 }

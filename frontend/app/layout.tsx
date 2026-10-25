@@ -1,8 +1,9 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter, Space_Grotesk } from 'next/font/google'
 import './globals.css'
 import { Providers } from '@/components/Providers'
 import { Navbar } from '@/components/Navbar'
+import { BottomNav } from '@/components/BottomNav'
 import { WrongNetworkBanner } from '@/components/WrongNetworkBanner'
 import { Footer } from '@/components/Footer'
 
@@ -17,6 +18,13 @@ const spaceGrotesk = Space_Grotesk({
   variable: '--font-display',
   display: 'swap',
 })
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  // Extends the webview under notches/gesture bars so pb-safe paddings work
+  viewportFit: 'cover',
+}
 
 export const metadata: Metadata = {
   title: 'NexusNFT - Decentralized NFT Marketplace',
@@ -41,10 +49,12 @@ export default function RootLayout({
         <Providers>
           <Navbar />
           <WrongNetworkBanner />
-          <main className="flex-1">
+          {/* Reserve space for the mobile bottom navigation */}
+          <main className="flex-1 pb-safe-lg md:pb-0">
             {children}
           </main>
           <Footer />
+          <BottomNav />
         </Providers>
       </body>
     </html>
